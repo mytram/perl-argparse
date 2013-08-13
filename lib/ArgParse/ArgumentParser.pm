@@ -67,6 +67,7 @@ sub init {
     $self->{'-prog'}           = delete $args->{'prog'} || $0;
     $self->{'-description'}    = delete $args->{'description'} || '';
     $self->{'-parser_configs'} = delete $args->{'parser_configs'}  || [];
+    $self->{'-option_position'} = 0;
 
     while( my ($key, $value) = each %$args ) {
         $self->{"-$key"} = $value;
@@ -77,6 +78,10 @@ sub init {
         action => 'store_true',
         help   => 'show this help message and exit',
     );
+
+    if (my $p = $args->{parent}) {
+        $self->add_arguments( @ { $p->{-pristine_add_arguments} || [] } );
+    }
 }
 
 sub prog           { $_[0]->{'-prog'} }
@@ -86,7 +91,7 @@ sub parser_configs { wantarray ? @{ $_[0]->{'-parser_configs'} } : $_[0]->{'-par
 sub add_arguments {
     my $self = shift;
 
-    $self->add_argument($_) for @_;
+    $self->add_argument(@$_) for @_;
 }
 
 #
@@ -108,16 +113,19 @@ sub add_arguments {
 sub add_argument {
     my $self = shift;
 
-    return unless @_;
+    return unless @_; # mostly harmless
 
-    my $name;
+    push @{ $self->{-pristine_add_arguments} }, [ @_ ];
 
-    my @flags = ();
+    ################
+    # name or flags
+    ################
+    my ($name, @flags);
 
+    #
   FLAG:
     while (my $flag = shift @_) {
         if (substr($flag, 0, 1) eq '-') {
-            $flag =~ s/^-+//; # default name
             push @flags, $flag;
         } else {
             unshift @_, $flag;
@@ -125,68 +133,123 @@ sub add_argument {
         }
     }
 
-    if ( @flags ) {
-        $name = $flags[0];
-    } else {
-        # positional argument
-        $name = shift @_;
-    }
+    # It's a positional argument spec if there are no flags
+    $name = @flags ? $flags[0] : shift(@_);
+    $name =~ s/^-+//g;
 
-    croak "Must provide argument name" unless $name;
+    croak "Must provide at least one non-empty argument name" unless $name;
 
-    if (@_ % 2 ) {
-        croak "Incorrect arguments";
-    }
+    croak "Incorrect arguments" if @_ % 2;
 
     my $args = { @_ };
 
+    ################
+    # action
+    ################
     my $action_name = $args->{action} || 'store';
 
     my $action = $Action2ClassMap{$action_name}
         if exists $Action2ClassMap{$action_name};
 
     {
+        local $SIG{__WARN__};
         local $SIG{__DIE__};
 
         eval "require $action";
 
-        croak $@ if $@;
+        croak "Cannot find the module for action $action" if $@;
     };
 
+    ################
+    # nargs
+    ################
+    my $nargs = $args->{nargs};
+
+    if (! defined $nargs) {
+        $nargs = $action->nargs if $action->can('nargs');
+    }
+
+    # 1 is the same as undef
+    $nargs = undef if defined($nargs) && "$nargs" eq '1';
+
+    ################
+    # const
+    ################
     my $const = $args->{const};
 
-    if ($action_name =~ /_const!/) {
-        croak 'const must be provided for store_const'
+    if ($action_name =~ /const!/i) {
+        croak "const must be provided for $action_name"
             unless defined $const;
     } else {
         # throw away your const - warning?
         $const = undef;
     }
 
-    # throw away your const
+    # This is a hack. Ideally the parser should be independent of the
+    # action
     $const = CONST_TRUE() if $action_name eq 'store_true';
     $const = CONST_FALSE() if $action_name eq 'store_false';
 
-    # nargs
-    my $nargs = $args->{nargs};
-
-    if ( ! defined $nargs ) {
-        $nargs = $action->nargs if $action->can('nargs');
-    }
-
-    $nargs = undef if defined($nargs) && "$nargs" eq '1';
-
+    ################
     # type
-
+    ################
     my $type_name = $args->{type} || '';
     my $type = $Type2ConstMap{$type_name};
 
+    ################
+    # default
+    ################
+    my $default;
+    if (exists $args->{default}) {
+        my $val = $args->{default};
+        if (ref($val) eq 'ARRAY') {
+            $default = $val;
+        } elsif (ref($val) eq 'HASH') {
+            croak 'Cannot use HASH default for non-hash type options'
+                if $type != TYPE_PAIR;
+            $default = $val;
+        } else {
+            $default = [ $val ];
+        }
+    } else {
+        $default = [];
+    }
+
+    ################
+    # choices
+    ################
+    my $choices = $args->{choices};
+    if ($choices && ref($choices) eq 'ARRAY') {
+        croak "Must provice choices in an array ref";
+    }
+
+    ################
+    # required
+    ################
+    my $required = $args->{required} || '';
+
+    ################
+    # help
+    ################
+    # $args->{help}
+
+    ################
+    # metavar
+    ################
+    my $metavar = $args->{metavar} || uc($name);
+    $metavar = '' if (defined($nargs) && "$nargs" eq "0")
+        || $action_name eq 'store_true'
+        || $action_name eq 'store_false'
+        || $action_name eq 'count';
+
+    ################
+    # dest
+    ################
     my $dest = $args->{dest} || $name;
+    $dest =~ s/-/_/g; # option-name becomes option_name
 
-    croak "Must provide a name or a dest" unless $dest;
-
-    $dest =~ s/-/_/g;
-
+    # never modify existing ones so that the parent's structure will
+    # not be modified
     my $spec = {
         name     => $name,
         flags    => \@flags,
@@ -195,27 +258,159 @@ sub add_argument {
         const    => $const,
         required => $args->{required},
         type     => $type,
-        default  => (ref($args->{default}) eq 'ARRAY' ? $args->{default} : $args->{default}),
+        default  => $default || [],
+        choices  => $choices,
         dest     => $dest,
-        choices  => $args->{choices} || [],
+        metavar  => $metavar,
         help     => $args->{help} || '',
+        position => $self->{-option_position}++, # sort order
     };
 
+    # override
     if (@flags) {
         $self->{-option_specs}{$spec->{dest}} = $spec;
-        # push @ { $self->{-option_specs} } }, $spec;
     } else {
-        push @ { $self->{-position_specs} }, $spec;
+        $self->{-position_specs}{$spec->{dest}} = $spec;
     }
 
     return $self;
 }
 
+sub parse_args {
+    my $self = shift;
+
+    my @saved_argv = @ARGV;
+
+    my @argv = scalar(@_) ? @_ : @ARGV;
+
+    unless (@argv) {
+        my $usage = $self->usage();
+        print STDERR join("\n", @$usage);
+        exit(0);
+    }
+
+    my $namespace = ArgParse::Namespace->new();
+
+    Getopt::Long::Configure( $self->parser_configs );
+
+    my $options   = {};
+    my $dest2spec = {};
+
+    my @option_specs = sort {
+        $a->{position} <=> $b->{position}
+    } values %{$self->{-option_specs}};
+
+    for my $spec ( @option_specs ) {
+        my @values =  @{$spec->{default}};
+        $dest2spec->{$spec->{dest}} = $self->_get_option_spec($spec);
+        $options->{ $dest2spec->{$spec->{dest}} } = \@values;
+    }
+
+    my $result = GetOptionsFromArray( \@argv, %$options );
+
+    if (!$result) {
+        die "Getoptions error";
+    }
+
+    # required
+    for my $spec ( @option_specs ) {
+        croak sprintf('%s is required', $spec->{dest}),
+            if $spec->{required} && ! scalar(@{$options->{ $dest2spec->{$spec->{dest}} }});
+    }
+
+    # choices
+    for my $spec ( @option_specs ) {
+        next unless scalar(@{ $spec->{choices} || [] });
+        for my $v (@{$options->{ $dest2spec->{$spec->{dest}} }}) {
+            unless (grep {
+                (!defined($v) && !defined($_)) || $v eq $_
+            } @{ $spec->{choices} } ) {
+                croak sprintf(
+                    "option %s value %s not in [ %s ]",
+                    $spec->{dest},
+                    $v,
+                    join(', ', @{$spec->{choices}}),
+                );
+            }
+        }
+    }
+
+    # action
+    for my $spec ( @option_specs) {
+        my $action = $spec->{action};
+
+        $action->apply($spec, $namespace, $options->{ $dest2spec->{$spec->{dest}} }, $spec->{name});
+    }
+
+    # positional arguments
+    $self->{-argv} = \@argv;
+
+    Getopt::Long::Configure('default');
+
+    if ($namespace->get_attr('help')) {
+        my $usage = $self->usage();
+        print STDERR join("\n", @$usage);
+        exit(0);
+    }
+
+    return $namespace;
+}
+
+
+sub usage {
+    my $self = shift;
+
+    my @usage;
+
+    my @option_specs = sort {
+        $a->{position} <=> $b->{position}
+    } values %{ $self->{-option_specs} || {} };
+
+    my $flag_string = join(' ', map {
+        ($_->{required} ? '' : '[')
+        . join('|', @{$_->{flags}})
+        . ($_->{required} ? '' : ']')
+    } @option_specs);
+
+    push @usage, sprintf('usage: %s %s', $self->prog, $flag_string);
+    push @usage, $self->description if $self->description;
+
+    push @usage, "\n";
+
+    push @usage, 'positional arguments:' if exists $self->{-position_specs};
+
+    push @usage, 'optional arguments:' if exists $self->{-option_specs};
+
+
+    my $max = 10;
+    my @item_help;
+    for my $spec (@option_specs) {
+        my $item = sprintf("%s %s", join(', ',  @{$spec->{flags}}), $spec->{metavar});
+        my $len = length($item);
+        $max = $len if $len > $max;
+        push @item_help, [ $item, $spec->{help} ];
+    }
+
+    $max *= -1;
+    my $format = "  %${max}s    %s";
+    for my $ih (@item_help) {
+       push @usage, sprintf($format, @$ih)
+    }
+
+    push @usage, "\n";
+
+    return \@usage;
+}
+
+# translate option spec to the one accepted by
+# Getopt::Long::GetOptions
 sub _get_option_spec {
     my $class = shift;
     my $spec  = shift;
 
-    my $name = join('|', @{ $spec->{flags} });
+    my @flags = @{ $spec->{flags} };
+    $_ =~ s/^-+// for @flags;
+    my $name = join('|', @flags);
     my $type = '';
     my $desttype = $spec->{type} == TYPE_PAIR() ? '%' : '@';
 
@@ -266,94 +461,4 @@ sub _get_option_spec {
     return join('', $name, $optional_flag, $type, $repeat, $desttype);
 }
 
-sub parse_args {
-    my $self = shift;
-
-    my @saved_argv = @ARGV;
-
-    my @argv = scalar(@_) ? @_ : @ARGV;
-
-    unless (@argv) {
-        $self->usage();
-        exit(0);
-    }
-
-    my $namespace = ArgParse::Namespace->new();
-
-    Getopt::Long::Configure( $self->parser_configs );
-
-    my $options   = {};
-    my $dest2spec = {};
-
-    for my $spec ( values %{ $self->{-option_specs} } ) {
-        my @values;
-        if ($spec->{default}) {
-            push @values,
-                (ref($spec->{default}) ? @{$spec->{default}} : $spec->{default});
-        }
-        $dest2spec->{$spec->{dest}} = $self->_get_option_spec($spec);
-        $options->{ $dest2spec->{$spec->{dest}} } = \@values;
-    }
-
-    my $result = GetOptionsFromArray( \@argv, %$options );
-
-    if (!$result) {
-        die "Getoptions error";
-    }
-
-    # required
-    for my $spec ( values %{ $self->{-option_specs} } ) {
-        croak sprintf('%s is required', $spec->{dest}),
-            if $spec->{required} && ! scalar(@{$options->{ $dest2spec->{$spec->{dest}} }});
-    }
-
-    # choices
-    for my $spec ( values %{ $self->{-option_specs} } ) {
-        next unless scalar(@{ $spec->{choices} });
-    }
-
-    # action
-    for my $spec ( values %{ $self->{-option_specs} } ) {
-        my $action = $spec->{action};
-
-        $action->apply($spec, $namespace, $options->{ $dest2spec->{$spec->{dest}} }, $spec->{name});
-    }
-
-    # positional arguments
-    $self->{-argv} = \@argv;
-
-    Getopt::Long::Configure('default');
-
-    if ($namespace->get_attr('help')) {
-        $self->usage();
-        exit(0);
-    }
-
-    return $namespace;
-}
-
-sub usage {
-    my $self = shift;
-
-    my @usage;
-
-    push @usage, sprintf('usage: %s', $self->prog);
-
-    push @usage, "\n";
-
-    push @usage, 'optional arguments:';
-
-    for my $spec (values %{$self->{-option_specs}}) {
-       push @usage, sprintf('  %s %s        %s',
-                             join(', ', (map { "-$_" } @{$spec->{flags}})),
-                             ($spec->{metavar} || uc($spec->{dest})),
-                             $spec->{help}
-       );
-    }
-
-    print STDERR join("\n", @usage);
-}
-
-
 1;
-
