@@ -1,4 +1,4 @@
-require 5.008;
+require 5.008001;
 
 package ArgParse::Namespace;
 {
@@ -54,10 +54,10 @@ sub AUTOLOAD {
         } elsif (ref($values) eq 'HASH') {
             return wantarray ? @$values : $values;
         } else {
-            return $values || '';
+            return $values;
         }
     } else {
-        croak "$dest is not a known option";
+        croak "$dest is an unknown option";
     }
 
     return '';

@@ -2,7 +2,7 @@ require 5.008001;
 
 package ArgParse::ArgumentParser;
 {
-    $ARgParse::ArgumentParser::VERSION = '0.01';
+    $ArgParse::ArgumentParser::VERSION = '0.01';
 }
 
 use Carp;
@@ -98,7 +98,8 @@ sub add_arguments {
 # add_argument()
 #
 #    name or flags - Either a name or a list of option strings, e.g. foo or -f, --foo.
-#    action        - The basic type of action to be taken when this argument is encountered at the command line.
+#    action        - The basic type of action to be taken when this argument
+#                    is encountered at the command line.
 #    nargs         - The number of command-line arguments that should be consumed.
 #    const         - A constant value required by some action and nargs selections.
 #    default       - The value produced if the argument is absent from the command line.
@@ -177,7 +178,7 @@ sub add_argument {
     ################
     my $const = $args->{const};
 
-    if ($action_name =~ /const!/i) {
+    if ($action_name =~ /const$/i) {
         croak "const must be provided for $action_name"
             unless defined $const;
     } else {
@@ -187,8 +188,8 @@ sub add_argument {
 
     # This is a hack. Ideally the parser should be independent of the
     # action
-    $const = CONST_TRUE() if $action_name eq 'store_true';
-    $const = CONST_FALSE() if $action_name eq 'store_false';
+    $const = [ CONST_TRUE()  ] if $action_name eq 'store_true';
+    $const = [ CONST_FALSE() ] if $action_name eq 'store_false';
 
     ################
     # type
@@ -247,6 +248,17 @@ sub add_argument {
     ################
     my $dest = $args->{dest} || $name;
     $dest =~ s/-/_/g; # option-name becomes option_name
+
+    if (@flags) {
+        while (my ($d, $s) = each %{$self->{-option_specs}}) {
+            if ($dest ne $d) {
+                for my $f (@flags) {
+                    croak "$f already used for a different option ($d)"
+                        if grep { $f eq $_ } @{$s->{flags}};
+                }
+            }
+        }
+    }
 
     # never modify existing ones so that the parent's structure will
     # not be modified
@@ -322,16 +334,15 @@ sub parse_args {
     for my $spec ( @option_specs ) {
         next unless scalar(@{ $spec->{choices} || [] });
         for my $v (@{$options->{ $dest2spec->{$spec->{dest}} }}) {
-            unless (grep {
-                (!defined($v) && !defined($_)) || $v eq $_
-            } @{ $spec->{choices} } ) {
+            unless ( grep { ( !defined($v) && !defined($_) ) || $v eq $_ }
+                @{ $spec->{choices} } )
+            {
                 croak sprintf(
                     "option %s value %s not in [ %s ]",
-                    $spec->{dest},
-                    $v,
-                    join(', ', @{$spec->{choices}}),
+                    $spec->{dest}, $v, join( ', ', @{ $spec->{choices} } ),
                 );
             }
+
         }
     }
 

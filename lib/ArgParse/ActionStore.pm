@@ -10,19 +10,30 @@ sub apply {
     my ($spec, $namespace, $values) = @_;
     $values ||= [];
 
-    if ( defined($spec->{nargs}) ) {
-        $namespace->set_attr($spec->{dest}, $values);
-    } else {
-        croak sprintf('%s can only be specified once', $spec->{dest})
+    unless (defined $spec->{nargs} ) {
+        croak sprintf('%s can only have one value', $spec->{dest})
             if @$values > 1;
 
+        croak sprintf('%s can only have one value: multiple const supplied', $spec->{dest})
+            if defined($spec->{const}) && scalar(@{ $spec->{const} }) > 1;
+    }
+
+    if ( defined($spec->{nargs}) ) {
         if (defined $spec->{const}) {
             $namespace->set_attr($spec->{dest}, $spec->{const})
                 if @$values;
         } else {
-            my $v = shift @$values;
-            $namespace->set_attr($spec->{dest}, $v);
+            $namespace->set_attr($spec->{dest}, $values);
         }
+    } else {
+        my $v;
+        if (defined $spec->{const}) {
+            $v = shift @{$spec->{const}} if @$values;
+        } else {
+            $v = shift @$values;
+        }
+
+        $namespace->set_attr($spec->{dest}, $v);
     }
 }
 

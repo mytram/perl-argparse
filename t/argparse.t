@@ -1,7 +1,5 @@
-use lib '../lib';
-
-# use Test::Most tests => 3;
 use Test::More;
+use Test::Exception;
 
 BEGIN { use_ok ( 'ArgParse::ArgumentParser' ) };
 
@@ -32,6 +30,10 @@ $parser->add_argument(
     action   => 'append',
     required => 1,
 );
+
+throws_ok( sub {
+               $ns = $parser->parse_args(split(/ /, '-foo 10 20 30 --array a --array b --array c'));
+}, qr/required/, 'required option');
 
 $ns = $parser->parse_args(split(/ /, '-foo 10 20 30 -b --array a --array b --array c'));
 
