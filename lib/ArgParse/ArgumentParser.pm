@@ -22,8 +22,8 @@ use constant {
     TYPE_PAIR	 => 4, # key=value pair
     TYPE_BOOL	 => 5,
 
-    CONST_TRUE         => 1,
-    CONST_FALSE        => 0,
+    CONST_TRUE   => 1,
+    CONST_FALSE  => 0,
 };
 
 my %Action2ClassMap = (
@@ -526,7 +526,9 @@ sub _get_option_spec {
     #     $desttype = '';
     # }
 
-    return join('', $name, $optional_flag, $type, $repeat, $desttype);
+    my $opt = join('', $name, $optional_flag, $type, $repeat, $desttype);
+    print STDERR 'xxx ', $opt, "\n";
+    return $opt;
 }
 
 1;

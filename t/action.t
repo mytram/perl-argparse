@@ -18,9 +18,6 @@ $n = $p->parse_args(split(' ', '-s a,b,c'));
 diag(join(' ', @s));
 ok(scalar(@s) eq 3, "split");
 
-
-
-
 # store_const
 throws_ok (
     sub {
@@ -97,7 +94,6 @@ lives_ok(
 ok (scalar(@append) eq 3, "3 append values");
 ok ($append[0] eq 'a', "a = a");
 
-
 lives_ok(
     sub { $n = $p->parse_args(split(' ', '--append b')); },
 );
@@ -107,7 +103,30 @@ ok (scalar(@append) eq 1, "3 append values");
 
 ok ($append[0] eq 'b', "b = b");
 
+$p->add_argument('--append', action => 'append', split => ',', required => 0);
+
+lives_ok(
+    sub { $n = $p->parse_args(split(' ', '--append a,b,c --append 1')); },
+);
+
+@append = $n->append;
+ok (scalar(@append) eq 2, "append split");
+
+ok ($append[0][0] eq 'a', "append split [0][0]");
+ok ($append[1][0] eq '1', "append split [0][1]");
+
 # append_const
+
+$p->add_argument('--append', action => 'append', split => ',', const => 100, required => 0);
+
+lives_ok(
+    sub { $n = $p->parse_args(split(' ', '--append a,b,c --append 1')); },
+);
+
+@append = $n->append;
+ok (scalar(@append) eq 3, "append const split");
+ok ($append[0][0] eq '100', "append const split [0][0]");
+
 
 done_testing;
 

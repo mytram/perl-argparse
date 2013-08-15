@@ -27,17 +27,11 @@ sub apply {
                 && defined($spec->{const})
                 && scalar(@{ $spec->{const} }) > 1;
 
-    if (defined $delimit) {
-        if (defined $spec->{const}) {
-            $namespace->set_attr($spec->{dest}, $spec->{const})
-        } else {
-            $namespace->set_attr($spec->{dest}, [ split($delimit, $v) ]);
-        }
-    } else {
-        if (defined $spec->{const}) {
-            $v = shift @{$spec->{const}};
-        }
+    $v = $spec->{const}->[0] if $spec->{const};
 
+    if (defined $delimit) {
+        $namespace->set_attr($spec->{dest}, [ split($delimit, $v) ]);
+    } else {
         $namespace->set_attr($spec->{dest}, $v);
     }
 }
