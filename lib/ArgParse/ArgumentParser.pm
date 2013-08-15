@@ -20,6 +20,7 @@ use constant {
     TYPE_INTEGER => 2,
     TYPE_FLOAT   => 3,
     TYPE_PAIR	 => 4, # key=value pair
+    TYPE_BOOL	 => 5,
 
     CONST_TRUE         => 1,
     CONST_FALSE        => 0,
@@ -28,8 +29,6 @@ use constant {
 my %Action2ClassMap = (
 	'store'        => 'ArgParse::ActionStore',
     'store_const'  => 'ArgParse::ActionStore',
-    'store_true'   => 'ArgParse::ActionStore',
-    'store_false'  => 'ArgParse::ActionStore',
     'append'       => 'ArgParse::ActionAppend',
     'append_const' => 'ArgParse::ActionAppend',
     'count'        => 'ArgParse::ActionCount',
@@ -42,6 +41,7 @@ my %Type2ConstMap = (
     'int'  => TYPE_INTEGER(),
     'str'  => TYPE_STRING(),
     'pair' => TYPE_PAIR(),
+    'bool' => TYPE_BOOL(),
 );
 
 #
@@ -75,7 +75,7 @@ sub init {
 
     $self->add_argument(
         '--help', '-h',
-        action => 'store_true',
+        type => 'bool',
         help   => 'show this help message and exit',
     );
 
@@ -92,6 +92,41 @@ sub add_arguments {
     my $self = shift;
 
     $self->add_argument(@$_) for @_;
+}
+
+sub add_bool {
+    my $self = shift;
+
+    my ($name, $flags, $args) = $self->_parse_name_and_flags( [@_] );
+
+    $self->add_argument(
+        @$args,
+        name  => $name,
+        flags => $flags,
+        type  => 'bool',
+    );
+}
+
+sub _parse_name_and_flags {
+    my $self = shift;
+    my $args = shift;
+
+    my ($name, @flags);
+  FLAG:
+    while (my $flag = shift @$args) {
+        if (substr($flag, 0, 1) eq '-') {
+            push @flags, $flag;
+        } else {
+            unshift @$args, $flag;
+            last FLAG;
+        }
+    }
+
+    # It's a positional argument spec if there are no flags
+    $name = @flags ? $flags[0] : shift(@$args);
+    $name =~ s/^-+//g;
+
+    return ( $name, \@flags, $args );
 }
 
 #
@@ -118,31 +153,16 @@ sub add_argument {
 
     push @{ $self->{-pristine_add_arguments} }, [ @_ ];
 
-    ################
-    # name or flags
-    ################
-    my ($name, @flags);
-
-    #
-  FLAG:
-    while (my $flag = shift @_) {
-        if (substr($flag, 0, 1) eq '-') {
-            push @flags, $flag;
-        } else {
-            unshift @_, $flag;
-            last FLAG;
-        }
-    }
-
-    # It's a positional argument spec if there are no flags
-    $name = @flags ? $flags[0] : shift(@_);
-    $name =~ s/^-+//g;
-
-    croak "Must provide at least one non-empty argument name" unless $name;
 
     croak "Incorrect arguments" if @_ % 2;
 
     my $args = { @_ };
+
+    my $name = $args->{name};
+
+    croak "Must provide at least one non-empty argument name" unless $name;
+
+    my @flags = @{ $args->{flags} || [] };
 
     ################
     # action
@@ -438,6 +458,9 @@ sub _get_option_spec {
     } elsif ($spec->{type} == TYPE_UNDEF) {
         $type = 's';
         $optional_flag = ':';
+    } elsif ($spec->{type} == TYPE_BOOL) {
+        $type = '';
+        $optional_flag = '';
     } else {
         # pass
         # should never be here

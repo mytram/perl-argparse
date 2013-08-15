@@ -101,3 +101,4 @@ ok ($append[0] eq 'b', "b = b");
 # append_const
 
 done_testing;
+
