@@ -7,7 +7,7 @@ use ArgParse::ArgumentParser;
 $p = ArgParse::ArgumentParser->new();
 ok($p, "new argparser");
 
-
+# not supported yet
 $p->add_argument('--type-hash', type => 'pair');
 
 $n = $p->parse_args(split(' ', '--type-hash a=b'));
