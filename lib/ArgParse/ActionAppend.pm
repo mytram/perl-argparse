@@ -11,15 +11,13 @@ sub apply {
 
     $values ||= [];
 
-    my $v = $namespace->get_attr($spec->{dest});
-    unless ($v) {
-        $v = [];
-        push @$v, (defined($spec->{nargs}) ? $spec->{const} : @{$spec->{const}})
-                              if defined $spec->{const};
-        $namespace->set_attr( $spec->{dest}, $v );
-    }
+    my $v = $namespace->get_attr( $spec->{dest} ) || [];
 
-    push @$v, (defined($spec->{nargs}) ? $values : @$values );
+    push @$v,
+        map { $spec->{split} ? [ split($spec->{split}, $_) ] : $_ }
+            @{$spec->{const} || []}, @$values;
+
+    $namespace->set_attr( $spec->{dest}, $v );
 }
 
 1;

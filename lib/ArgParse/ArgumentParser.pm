@@ -94,20 +94,16 @@ sub add_arguments {
     $self->add_argument(@$_) for @_;
 }
 
-sub add_bool {
-    my $self = shift;
+#sub add_bool {
+#    my $self = shift;
+#
+#    $self->add_argument(
+#        @_,
+#        type  => 'bool',
+#    );
+#}
 
-    my ($name, $flags, $args) = $self->_parse_name_and_flags( [@_] );
-
-    $self->add_argument(
-        @$args,
-        name  => $name,
-        flags => $flags,
-        type  => 'bool',
-    );
-}
-
-sub _parse_name_and_flags {
+sub _parse_args_for_name_and_flags {
     my $self = shift;
     my $args = shift;
 
@@ -135,7 +131,7 @@ sub _parse_name_and_flags {
 #    name or flags - Either a name or a list of option strings, e.g. foo or -f, --foo.
 #    action        - The basic type of action to be taken when this argument
 #                    is encountered at the command line.
-#    nargs         - The number of command-line arguments that should be consumed.
+#    split         - a char by which to split the argument string
 #    const         - A constant value required by some action and nargs selections.
 #    default       - The value produced if the argument is absent from the command line.
 #    type          - The type to which the command-line argument should be converted.
@@ -153,16 +149,15 @@ sub add_argument {
 
     push @{ $self->{-pristine_add_arguments} }, [ @_ ];
 
+    my ($name, $flags, $rest) = $self->_parse_args_for_name_and_flags([ @_ ]);
 
-    croak "Incorrect arguments" if @_ % 2;
+    croak "Incorrect arguments" if scalar(@$rest) % 2;
 
-    my $args = { @_ };
-
-    my $name = $args->{name};
+    my $args = { @$rest };
 
     croak "Must provide at least one non-empty argument name" unless $name;
 
-    my @flags = @{ $args->{flags} || [] };
+    my @flags = @{ $flags || [] };
 
     ################
     # action
@@ -171,6 +166,8 @@ sub add_argument {
 
     my $action = $Action2ClassMap{$action_name}
         if exists $Action2ClassMap{$action_name};
+
+    $action = $action_name unless $action;
 
     {
         local $SIG{__WARN__};
@@ -184,14 +181,23 @@ sub add_argument {
     ################
     # nargs
     ################
-    my $nargs = $args->{nargs};
+    # my $nargs = $args->{nargs};
+    #
+    # if (! defined $nargs) {
+    #     $nargs = $action->nargs if $action->can('nargs');
+    # }
+    #
+    # # 1 is the same as undef
+    # $nargs = undef if defined($nargs) && "$nargs" eq '1';
+    # $nargs = '0' if $action_name eq 'count';
 
-    if (! defined $nargs) {
-        $nargs = $action->nargs if $action->can('nargs');
+    ################
+    # split
+    ################
+    my $split = $args->{split};
+    if (defined $split && !$split && $split =~ /^ +$/) {
+        croak 'cannot split arguments on whitespaces';
     }
-
-    # 1 is the same as undef
-    $nargs = undef if defined($nargs) && "$nargs" eq '1';
 
     ################
     # const
@@ -201,21 +207,24 @@ sub add_argument {
     if ($action_name =~ /const$/i) {
         croak "const must be provided for $action_name"
             unless defined $const;
-    } else {
-        # throw away your const - warning?
-        $const = undef;
     }
 
-    # This is a hack. Ideally the parser should be independent of the
-    # action
-    $const = [ CONST_TRUE()  ] if $action_name eq 'store_true';
-    $const = [ CONST_FALSE() ] if $action_name eq 'store_false';
+    if (defined $const) {
+        # hash is considered a scalar
+        if (ref($const) ne 'ARRAY') {
+            $const = [ $const ];
+        }
+    }
 
     ################
     # type
     ################
     my $type_name = $args->{type} || '';
     my $type = $Type2ConstMap{$type_name};
+
+    if ($type == TYPE_BOOL) {
+        $const = [ 1 ] unless defined $const;
+    }
 
     ################
     # default
@@ -239,7 +248,7 @@ sub add_argument {
     ################
     # choices
     ################
-    my $choices = $args->{choices};
+    my $choices = $args->{choices} || undef;
     if ($choices && ref($choices) eq 'ARRAY') {
         croak "Must provice choices in an array ref";
     }
@@ -252,16 +261,17 @@ sub add_argument {
     ################
     # help
     ################
-    # $args->{help}
+    my $help = $args->{help} || '';
 
     ################
     # metavar
     ################
     my $metavar = $args->{metavar} || uc($name);
-    $metavar = '' if (defined($nargs) && "$nargs" eq "0")
-        || $action_name eq 'store_true'
-        || $action_name eq 'store_false'
-        || $action_name eq 'count';
+
+    # (defined($nargs) && "$nargs" eq "0")
+    $metavar = ''
+        if $type == TYPE_BOOL
+            || $action_name eq 'count';
 
     ################
     # dest
@@ -286,15 +296,16 @@ sub add_argument {
         name     => $name,
         flags    => \@flags,
         action   => $action,
-        nargs    => $nargs,
+        split    => $args->{split},
+        # nargs    => $nargs,
         const    => $const,
-        required => $args->{required},
+        required => $args->{required} || '',
         type     => $type,
-        default  => $default || [],
+        default  => $default,
         choices  => $choices,
         dest     => $dest,
         metavar  => $metavar,
-        help     => $args->{help} || '',
+        help     => $help,
         position => $self->{-option_position}++, # sort order
     };
 
@@ -317,7 +328,6 @@ sub parse_args {
 
     unless (@argv) {
         my $usage = $self->usage();
-        print STDERR join("\n", @$usage);
         exit(0);
     }
 
@@ -338,10 +348,15 @@ sub parse_args {
         $options->{ $dest2spec->{$spec->{dest}} } = \@values;
     }
 
-    my $result = GetOptionsFromArray( \@argv, %$options );
+    {
+        my $warn;
+        local $SIG{__WARN__} = sub { $warn = shift };
 
-    if (!$result) {
-        die "Getoptions error";
+        my $result = GetOptionsFromArray( \@argv, %$options );
+
+        if ($warn || !$result) {
+            croak "Getoptions error: $warn";
+        }
     }
 
     # required
@@ -367,7 +382,7 @@ sub parse_args {
     }
 
     # action
-    for my $spec ( @option_specs) {
+    for my $spec (@option_specs) {
         my $action = $spec->{action};
 
         $action->apply($spec, $namespace, $options->{ $dest2spec->{$spec->{dest}} }, $spec->{name});
@@ -380,13 +395,13 @@ sub parse_args {
 
     if ($namespace->get_attr('help')) {
         my $usage = $self->usage();
-        print STDERR join("\n", @$usage);
         exit(0);
     }
 
+    # parse positional
+
     return $namespace;
 }
-
 
 sub usage {
     my $self = shift;
@@ -430,7 +445,25 @@ sub usage {
 
     push @usage, "\n";
 
-    return \@usage;
+    print STDERR join("\n", @usage);
+}
+
+# string to number
+sub _ston {
+    my $self = shift;
+    my $s = shift;
+
+    return 0.0 unless $s;
+
+    my $f = $s;
+    {
+        my $warn;
+        local $SIG{__WARN__} = sub { $warn = shift; };
+        $f += 0.0;
+        croak "$s is not a number";
+    }
+
+    return $f;
 }
 
 # translate option spec to the one accepted by
@@ -461,6 +494,7 @@ sub _get_option_spec {
     } elsif ($spec->{type} == TYPE_BOOL) {
         $type = '';
         $optional_flag = '';
+        $desttype = '';
     } else {
         # pass
         # should never be here
@@ -468,29 +502,29 @@ sub _get_option_spec {
 
     my $repeat = '';
 
-    if (defined $spec->{nargs}) {
-        my $nargs = $spec->{nargs};
-        $type = 's' unless $type;
-        $optional_flag = '='; # requiring options
-
-        if ($nargs eq '?') {
-            $repeat = '{0,1}';
-        } elsif ($nargs eq '*') {
-            $repeat = '{,}';
-        } elsif ($nargs eq '+') {
-            $repeat = '{,}';
-        } elsif ( "$nargs" eq '0' ) {
-            $type          = '';
-            $optional_flag = '+';
-            $desttype      = '';
-        } elsif ($nargs =~ /^\d$/) {
-            $repeat = "{$nargs}";
-        } else {
-            croak "incorrect -nargs: $nargs";
-        }
-
-        $desttype = '';
-    }
+    # if (defined $spec->{nargs}) {
+    #     my $nargs = $spec->{nargs};
+    #     $type = 's' unless $type;
+    #     $optional_flag = '='; # requiring options
+    #
+    #     if ($nargs eq '?') {
+    #         $repeat = '{0,1}';
+    #     } elsif ($nargs eq '*') {
+    #         $repeat = '{,}';
+    #     } elsif ($nargs eq '+') {
+    #         $repeat = '{,}';
+    #     } elsif ( "$nargs" eq '0' ) {
+    #         $type          = '';
+    #         $optional_flag = '+';
+    #         $desttype      = '';
+    #     } elsif ($nargs =~ /^\d$/) {
+    #         $repeat = "{$nargs}";
+    #     } else {
+    #         croak "incorrect -nargs: $nargs";
+    #     }
+    #
+    #     $desttype = '';
+    # }
 
     return join('', $name, $optional_flag, $type, $repeat, $desttype);
 }

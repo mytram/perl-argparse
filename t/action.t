@@ -9,6 +9,18 @@ ok($p, "new argparser");
 
 # store
 
+$p->add_argument('--split', '-s', split => ',');
+
+$n = $p->parse_args(split(' ', '-s a,b,c'));
+
+@s = $n->split;
+
+diag(join(' ', @s));
+ok(scalar(@s) eq 3, "split");
+
+
+
+
 # store_const
 throws_ok (
     sub {
@@ -18,7 +30,7 @@ throws_ok (
     "const missing"
 );
 
-$p->add_argument('--store-const', action => 'store_const', const => [100, 200]);
+$p->add_argument('--store-const' , action => 'store_const', const => [100, 200]);
 
 throws_ok(
     sub { $n = $p->parse_args(split(' ', '--store-const')); },
@@ -34,12 +46,9 @@ diag($n->store_const);
 
 ok($n->store_const eq 100, "store_const 100");
 
-# store_true
-
 ok($n->store_const eq 100, "store_const");
 
-
-$p->add_argument('--store_true', action => 'store_true', required => 0);
+$p->add_argument('--store_true', type => 'bool', required => 0);
 
 lives_ok(
     sub { $n = $p->parse_args(split(' ', '--store_true')); },
@@ -49,7 +58,7 @@ ok($n->store_true, "store_true");
 
 # store_false
 
-$p->add_argument('--store_false', action => 'store_false', required => 0);
+$p->add_argument('--store_false', type => 'bool', const => 0, required => 0);
 
 lives_ok(
     sub { $n = $p->parse_args(split(' ', '--store_false')); },
