@@ -127,6 +127,5 @@ lives_ok(
 ok (scalar(@append) eq 3, "append const split");
 ok ($append[0][0] eq '100', "append const split [0][0]");
 
-
 done_testing;
 

@@ -131,7 +131,8 @@ sub _parse_args_for_name_and_flags {
 #    name or flags - Either a name or a list of option strings, e.g. foo or -f, --foo.
 #    action        - The basic type of action to be taken when this argument
 #                    is encountered at the command line.
-#    split         - a char by which to split the argument string
+#    split         - a string by which to split the argument string e.g. a,b,c
+#                    will be split into [ 'a', 'b', 'c' ] if split => ','
 #    const         - A constant value required by some action and nargs selections.
 #    default       - The value produced if the argument is absent from the command line.
 #    type          - The type to which the command-line argument should be converted.
@@ -359,34 +360,24 @@ sub parse_args {
         }
     }
 
-    # required
-    for my $spec ( @option_specs ) {
-        croak sprintf('%s is required', $spec->{dest}),
-            if $spec->{required} && ! scalar(@{$options->{ $dest2spec->{$spec->{dest}} }});
-    }
+    my $error = $self->_post_parse_processing( \@option_specs, $options, $dest2spec );
 
-    # choices
-    for my $spec ( @option_specs ) {
-        next unless scalar(@{ $spec->{choices} || [] });
-        for my $v (@{$options->{ $dest2spec->{$spec->{dest}} }}) {
-            unless ( grep { ( !defined($v) && !defined($_) ) || $v eq $_ }
-                @{ $spec->{choices} } )
-            {
-                croak sprintf(
-                    "option %s value %s not in [ %s ]",
-                    $spec->{dest}, $v, join( ', ', @{ $spec->{choices} } ),
-                );
-            }
-
-        }
-    }
+    croak $error if $error;
 
     # action
     for my $spec (@option_specs) {
         my $action = $spec->{action};
 
-        $action->apply($spec, $namespace, $options->{ $dest2spec->{$spec->{dest}} }, $spec->{name});
+        $action->apply(
+            $spec,
+            $namespace,
+            $options->{ $dest2spec->{$spec->{dest}} },
+            $spec->{name}
+        );
     }
+
+    $self->_post_action_apply_processing();
+
 
     # positional arguments
     $self->{-argv} = \@argv;
@@ -401,6 +392,86 @@ sub parse_args {
     # parse positional
 
     return $namespace;
+}
+
+sub _post_parse_processing {
+    my $self = shift;
+    my $option_specs = shift;
+    my $options = shift;
+    my $dest2spec = shift;
+    #
+
+
+    for my $spec ( @$option_specs ) {
+
+        my $values = $options->{ $dest2spec->{$spec->{dest}} };
+        # required
+        return sprintf('%s is required', $spec->{dest}),
+            if $spec->{required} && ! @$values;
+
+        # type check
+
+        # split and expand
+        # Pair are processed here as well
+        if ( my $delimit = $spec->{split} ) {
+            my @expanded;
+            for my $v (@$values) {
+                push @expanded,
+                    map {
+                        $spec->{type} == TYPE_PAIR ? { split('=', $_) } : $_
+                    } split($delimit, $v);
+            }
+
+            $options->{ $dest2spec->{$spec->{dest} } } = \@expanded;
+        } else {
+            # Process PAIR only
+            if ($spec->{type} == TYPE_PAIR) {
+                $options->{ $dest2spec->{$spec->{dest} } }
+                    = [ map { { split('=', $_) } } @$values ];
+            }
+        }
+    }
+
+    # choices
+    # for my $spec ( @$option_specs ) {
+    #     next unless scalar(@{ $spec->{choices} || [] });
+    #     for my $v (@{$options->{ $dest2spec->{$spec->{dest}} }}) {
+    #         unless ( grep { ( !defined($v) && !defined($_) ) || $v eq $_ }
+    #             @{ $spec->{choices} } )
+    #         {
+    #             return sprintf(
+    #                 "option %s value %s not in [ %s ]",
+    #                 $spec->{dest}, $v, join( ', ', @{ $spec->{choices} } ),
+    #             );
+    #         }
+    #
+    #     }
+    # }
+
+    # type check
+
+    ########
+    # split
+    ########
+
+    return '';
+}
+
+sub _post_action_processing {
+    # for my $spec ( @$option_specs ) {
+    #     next unless scalar(@{ $spec->{choices} || [] });
+    #     for my $v (@{$options->{ $dest2spec->{$spec->{dest}} }}) {
+    #         unless ( grep { ( !defined($v) && !defined($_) ) || $v eq $_ }
+    #             @{ $spec->{choices} } )
+    #         {
+    #             return sprintf(
+    #                 "option %s value %s not in [ %s ]",
+    #                 $spec->{dest}, $v, join( ', ', @{ $spec->{choices} } ),
+    #             );
+    #         }
+
+    #     }
+    # }
 }
 
 sub usage {
@@ -501,33 +572,10 @@ sub _get_option_spec {
     }
 
     my $repeat = '';
-
-    # if (defined $spec->{nargs}) {
-    #     my $nargs = $spec->{nargs};
-    #     $type = 's' unless $type;
-    #     $optional_flag = '='; # requiring options
     #
-    #     if ($nargs eq '?') {
-    #         $repeat = '{0,1}';
-    #     } elsif ($nargs eq '*') {
-    #         $repeat = '{,}';
-    #     } elsif ($nargs eq '+') {
-    #         $repeat = '{,}';
-    #     } elsif ( "$nargs" eq '0' ) {
-    #         $type          = '';
-    #         $optional_flag = '+';
-    #         $desttype      = '';
-    #     } elsif ($nargs =~ /^\d$/) {
-    #         $repeat = "{$nargs}";
-    #     } else {
-    #         croak "incorrect -nargs: $nargs";
-    #     }
-    #
-    #     $desttype = '';
-    # }
 
     my $opt = join('', $name, $optional_flag, $type, $repeat, $desttype);
-    print STDERR 'xxx ', $opt, "\n";
+
     return $opt;
 }
 
