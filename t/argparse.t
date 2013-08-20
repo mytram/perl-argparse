@@ -1,3 +1,4 @@
+use lib 'lib';
 use Test::More;
 use Test::Exception;
 
@@ -19,7 +20,7 @@ $parser->add_argument(
 
 $parser->add_argument(
     '--boo', '-b',
-    type     => 'bool',
+    type     => 'Bool',
     required => 1,
     dest     => 'has_boo',
 );

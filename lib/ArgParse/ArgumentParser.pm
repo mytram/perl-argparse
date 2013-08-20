@@ -28,9 +28,6 @@ use constant {
 
 my %Action2ClassMap = (
 	'store'       => 'ArgParse::ActionStore',
-	'store_const' => 'ArgParse::ActionStore',
-	'store_true'  => 'ArgParse::ActionStore',
-	'store_false' => 'ArgParse::ActionStore',
     'append'      => 'ArgParse::ActionAppend',
     'count'       => 'ArgParse::ActionCount',
     'help'        => 'ArgParse::ActionHelp',
@@ -39,9 +36,10 @@ my %Action2ClassMap = (
 
 my %Type2ConstMap = (
     ''        => TYPE_UNDEF(),
-    'int'     => TYPE_INTEGER(),
-    'str'     => TYPE_STRING(),
-    'pair'    => TYPE_PAIR(),
+    'Int'     => TYPE_INTEGER(),
+    'Str'     => TYPE_STRING(),
+    'Pair'    => TYPE_PAIR(),
+    'Bool'    => TYPE_BOOL(),
 );
 
 #
@@ -75,9 +73,8 @@ sub init {
 
     $self->add_argument(
         '--help', '-h',
-        action => 'store_true',
-        const  => 1,
-        help   => 'show this help message and exit',
+        type => 'Bool',
+        help => 'show this help message and exit',
     );
 
     # merge
@@ -106,7 +103,6 @@ sub add_arguments {
 #                    is encountered at the command line.
 #    split         - a string by which to split the argument string e.g. a,b,c
 #                    will be split into [ 'a', 'b', 'c' ] if split => ','
-#    const         - A constant value required by some action and nargs selections.
 #    default       - The value produced if the argument is absent from the command line.
 #    type          - The type to which the command-line argument should be converted.
 #    choices       - A container of the allowable values for the argument.
@@ -141,6 +137,12 @@ sub add_argument {
 
     croak "Unknown type: $type_name" unless defined $type;
 
+    if ($type == TYPE_BOOL) {
+        if (!defined $args->{default}) {
+            $args->{default} = 0; # False if unspecified, or True
+        }
+    }
+
     ################
     # action
     ################
@@ -150,16 +152,6 @@ sub add_argument {
         if exists $Action2ClassMap{$action_name};
 
     $action = $action_name unless $action;
-
-    $type = TYPE_BOOL if $action_name =~ /_const$/;
-
-    if ($action_name eq 'store_true') {
-        $type = TYPE_BOOL;
-        $args->{const} = 1;
-    } elsif ($action_name eq 'store_false') {
-        $type = TYPE_BOOL;
-        $args->{const} = 0;
-    }
 
     {
         local $SIG{__WARN__};
@@ -176,21 +168,6 @@ sub add_argument {
     my $split = $args->{split};
     if (defined $split && !$split && $split =~ /^ +$/) {
         croak 'cannot split arguments on whitespaces';
-    }
-
-    ################
-    # const
-    ################
-    my $const = $args->{const};
-
-    if ($action_name =~ /const$/i) {
-        croak "const is required for $action_name"
-            unless defined $const;
-    }
-
-    # hash is considered a scalar
-    if (defined $const && ref($const) ne 'ARRAY') {
-        $const = [ $const ];
     }
 
     ################
@@ -235,7 +212,6 @@ sub add_argument {
     ################
     my $metavar = $args->{metavar} || uc($name);
 
-    # (defined($nargs) && "$nargs" eq "0")
     $metavar = ''
         if $type == TYPE_BOOL
             || $action_name eq 'count';
@@ -264,7 +240,6 @@ sub add_argument {
         flags    => \@flags,
         action   => $action,
         split    => $args->{split},
-        const    => $const,
         required => $args->{required} || '',
         type     => $type,
         default  => $default,
@@ -331,7 +306,7 @@ sub parse_args {
     } values %{$self->{-option_specs}};
 
     for my $spec ( @option_specs ) {
-        my @values =  (); # @{$spec->{default}};
+        my @values =  ();
         $dest2spec->{$spec->{dest}} = $self->_get_option_spec($spec);
         $options->{ $dest2spec->{$spec->{dest}} } = \@values;
     }
@@ -353,6 +328,9 @@ sub parse_args {
 
     # action
     for my $spec (@option_specs) {
+        # Init
+        $namespace->set_attr($spec->{dest}, undef);
+
         my $action = $spec->{action};
 
         $action->apply(
@@ -380,7 +358,7 @@ sub parse_args {
 
 sub _parse_positional_args {
     my $self = shift;
-    
+    #
 }
 
 sub _post_parse_processing {
@@ -394,8 +372,8 @@ sub _post_parse_processing {
         my $values = $options->{ $dest2spec->{$spec->{dest}} };
 
         # default
-        if (scalar(@$values) < 1 && $spec->{default}) {
-            push @$values, @{$spec->{default}};
+        if ( scalar(@$values) < 1 && $spec->{default} ) {
+            push @$values, @{$spec->{default}} unless $spec->{type} == TYPE_BOOL;
         }
 
         # required
@@ -403,7 +381,6 @@ sub _post_parse_processing {
             if $spec->{required} && ! @$values;
 
         # type check
-        #
 
         # split and expand
         # Pair are processed here as well
@@ -426,7 +403,7 @@ sub _post_parse_processing {
         }
 
         # choices
-        if ($spec->{choices}) {
+        if ( $spec->{choices} ) {
             my %choices = map { defined($_) ? $_ : '_undef' => 1 } @{$spec->{choices}};
 
           VALUE:
@@ -435,16 +412,14 @@ sub _post_parse_processing {
                 next VALUE if exists $choices{$k};
 
                  return sprintf(
-                    "option %s value %s not in [ %s ]",
+                    "option %s value %s not in allowed choices: [ %s ]",
                      $spec->{dest}, $v, join( ', ', @{ $spec->{choices} } ),
                 );
             }
         }
 
-        # type check
+        # type convert
     }
-
-    ########
 
     return '';
 }

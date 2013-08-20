@@ -10,6 +10,10 @@ sub apply {
 
     $values ||= [];
 
+    if ($spec->{type} == ArgParse::ArgumentParser::TYPE_BOOL) {
+        croak 'appending to type Bool not allowed';
+    }
+
     my $v = $namespace->get_attr( $spec->{dest} ) || [];
 
     push @$v, @$values;

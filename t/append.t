@@ -55,17 +55,4 @@ $emails = $ns->email;
 ok(scalar(@$emails) == 1, 'append - ref - size');
 ok($emails->[0] eq 'abc@perl.org', 'append - ref - element');
 
-# const
-$p = ArgParse::ArgumentParser->new();
-$p->add_argument('--foo', type => 'bool');
-throws_ok(
-    sub { $p->add_argument(
-        '--email', '-e',
-        action   => 'append',
-        const    => 'mytram2@perl.org',
-    ) },
-    qr /const is not wanted/,
-    'const is not wanted',
-);
-
 done_testing;

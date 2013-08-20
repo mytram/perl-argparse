@@ -1,3 +1,4 @@
+use lib 'lib';
 use Test::More tests => 10;
 use Test::Exception;
 
