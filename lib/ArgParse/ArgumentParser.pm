@@ -284,7 +284,7 @@ sub add_argument {
         while (my ($d, $s) = each %{$self->{-option_specs}}) {
             if ($dest ne $d) {
                 for my $f (@flags) {
-                    croak "$f already used for a different option ($d)"
+                   croak "$f already used for a different option ($d)"
                         if grep { $f eq $_ } @{$s->{flags}};
                 }
             }
@@ -344,7 +344,7 @@ sub parse_args {
     } values %{$self->{-option_specs}};
 
     for my $spec ( @option_specs ) {
-        my @values =  @{$spec->{default}};
+        my @values =  (); # @{$spec->{default}};
         $dest2spec->{$spec->{dest}} = $self->_get_option_spec($spec);
         $options->{ $dest2spec->{$spec->{dest}} } = \@values;
     }
@@ -401,10 +401,12 @@ sub _post_parse_processing {
     my $dest2spec = shift;
     #
 
-
     for my $spec ( @$option_specs ) {
-
         my $values = $options->{ $dest2spec->{$spec->{dest}} };
+
+        if (scalar(@$values) < 1 && $spec->{default}) {
+            push @$values, @{$spec->{default}};
+        }
         # required
         return sprintf('%s is required', $spec->{dest}),
             if $spec->{required} && ! @$values;
@@ -457,7 +459,7 @@ sub _post_parse_processing {
     return '';
 }
 
-sub _post_action_processing {
+sub _post_action_apply_processing {
     # for my $spec ( @$option_specs ) {
     #     next unless scalar(@{ $spec->{choices} || [] });
     #     for my $v (@{$options->{ $dest2spec->{$spec->{dest}} }}) {

@@ -25,7 +25,7 @@ sub apply {
                 && defined($spec->{const})
                 && scalar(@{ $spec->{const} }) > 1;
 
-    $v = $spec->{const}->[0] if $spec->{const};
+    $v = $spec->{const}->[0] if @$values && $spec->{const};
 
     $namespace->set_attr($spec->{dest}, $v);
 }
