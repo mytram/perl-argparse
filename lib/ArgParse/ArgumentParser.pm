@@ -28,20 +28,19 @@ use constant {
 
 my %Action2ClassMap = (
 	'store'        => 'ArgParse::ActionStore',
-    'store_const'  => 'ArgParse::ActionStore',
+	'store_const'  => 'ArgParse::ActionStore',
     'append'       => 'ArgParse::ActionAppend',
-    'append_const' => 'ArgParse::ActionAppend',
     'count'        => 'ArgParse::ActionCount',
     'help'         => 'ArgParse::ActionHelp',
     'version'      => 'ArgParse::ActionVersion',
 );
 
 my %Type2ConstMap = (
-    ''     => TYPE_UNDEF(),
-    'int'  => TYPE_INTEGER(),
-    'str'  => TYPE_STRING(),
-    'pair' => TYPE_PAIR(),
-    'bool' => TYPE_BOOL(),
+    ''        => TYPE_UNDEF(),
+    'int'     => TYPE_INTEGER(),
+    'str'     => TYPE_STRING(),
+    'pair'    => TYPE_PAIR(),
+    'bool'    => TYPE_BOOL(),
 );
 
 #
@@ -76,9 +75,10 @@ sub init {
     $self->add_argument(
         '--help', '-h',
         type => 'bool',
-        help   => 'show this help message and exit',
+        help => 'show this help message and exit',
     );
 
+    # merge
     if (my $p = $args->{parent}) {
         $self->add_arguments( @ { $p->{-pristine_add_arguments} || [] } );
     }
@@ -86,43 +86,14 @@ sub init {
 
 sub prog           { $_[0]->{'-prog'} }
 sub description    { $_[0]->{'-description'} }
-sub parser_configs { wantarray ? @{ $_[0]->{'-parser_configs'} } : $_[0]->{'-parser_configs'} }
+sub parser_configs {
+    wantarray ? @{ $_[0]->{'-parser_configs'} } : $_[0]->{'-parser_configs'}
+}
 
 sub add_arguments {
     my $self = shift;
 
     $self->add_argument(@$_) for @_;
-}
-
-#sub add_bool {
-#    my $self = shift;
-#
-#    $self->add_argument(
-#        @_,
-#        type  => 'bool',
-#    );
-#}
-
-sub _parse_args_for_name_and_flags {
-    my $self = shift;
-    my $args = shift;
-
-    my ($name, @flags);
-  FLAG:
-    while (my $flag = shift @$args) {
-        if (substr($flag, 0, 1) eq '-') {
-            push @flags, $flag;
-        } else {
-            unshift @$args, $flag;
-            last FLAG;
-        }
-    }
-
-    # It's a positional argument spec if there are no flags
-    $name = @flags ? $flags[0] : shift(@$args);
-    $name =~ s/^-+//g;
-
-    return ( $name, \@flags, $args );
 }
 
 #
@@ -161,6 +132,17 @@ sub add_argument {
     my @flags = @{ $flags || [] };
 
     ################
+    # type
+    ################
+    my $type_name = $args->{type} || '';
+    my $type = $Type2ConstMap{$type_name} if exists $Type2ConstMap{$type_name};
+
+    if ($type == TYPE_BOOL) {
+        $args->{const} = 1 unless defined($args->{const});
+        $args->{action}  = 'store_const';
+    }
+
+    ################
     # action
     ################
     my $action_name = $args->{action} || 'store';
@@ -180,19 +162,6 @@ sub add_argument {
     };
 
     ################
-    # nargs
-    ################
-    # my $nargs = $args->{nargs};
-    #
-    # if (! defined $nargs) {
-    #     $nargs = $action->nargs if $action->can('nargs');
-    # }
-    #
-    # # 1 is the same as undef
-    # $nargs = undef if defined($nargs) && "$nargs" eq '1';
-    # $nargs = '0' if $action_name eq 'count';
-
-    ################
     # split
     ################
     my $split = $args->{split};
@@ -206,25 +175,18 @@ sub add_argument {
     my $const = $args->{const};
 
     if ($action_name =~ /const$/i) {
-        croak "const must be provided for $action_name"
+        croak "const is required for $action_name"
             unless defined $const;
+    } elsif (defined $const) {
+        my $want_const = $action->want_const if $action->can('want_const');
+
+        croak "const is not wanted for $action_name" unless $want_const;
+
     }
 
-    if (defined $const) {
-        # hash is considered a scalar
-        if (ref($const) ne 'ARRAY') {
-            $const = [ $const ];
-        }
-    }
-
-    ################
-    # type
-    ################
-    my $type_name = $args->{type} || '';
-    my $type = $Type2ConstMap{$type_name};
-
-    if ($type == TYPE_BOOL) {
-        $const = [ 1 ] unless defined $const;
+    # hash is considered a scalar
+    if (defined $const && ref($const) ne 'ARRAY') {
+        $const = [ $const ];
     }
 
     ################
@@ -298,7 +260,6 @@ sub add_argument {
         flags    => \@flags,
         action   => $action,
         split    => $args->{split},
-        # nargs    => $nargs,
         const    => $const,
         required => $args->{required} || '',
         type     => $type,
@@ -318,6 +279,28 @@ sub add_argument {
     }
 
     return $self;
+}
+
+sub _parse_args_for_name_and_flags {
+    my $self = shift;
+    my $args = shift;
+
+    my ($name, @flags);
+  FLAG:
+    while (my $flag = shift @$args) {
+        if (substr($flag, 0, 1) eq '-') {
+            push @flags, $flag;
+        } else {
+            unshift @$args, $flag;
+            last FLAG;
+        }
+    }
+
+    # It's a positional argument spec if there are no flags
+    $name = @flags ? $flags[0] : shift(@$args);
+    $name =~ s/^-+//g;
+
+    return ( $name, \@flags, $args );
 }
 
 sub parse_args {
@@ -376,9 +359,6 @@ sub parse_args {
         );
     }
 
-    $self->_post_action_apply_processing();
-
-
     # positional arguments
     $self->{-argv} = \@argv;
 
@@ -394,24 +374,32 @@ sub parse_args {
     return $namespace;
 }
 
-sub _post_parse_processing {
+sub _parse_positional_args {
     my $self = shift;
-    my $option_specs = shift;
-    my $options = shift;
-    my $dest2spec = shift;
-    #
+    
+}
 
+sub _post_parse_processing {
+    my $self         = shift;
+    my $option_specs = shift;
+    my $options      = shift;
+    my $dest2spec    = shift;
+
+    #
     for my $spec ( @$option_specs ) {
         my $values = $options->{ $dest2spec->{$spec->{dest}} };
 
+        # default
         if (scalar(@$values) < 1 && $spec->{default}) {
             push @$values, @{$spec->{default}};
         }
+
         # required
         return sprintf('%s is required', $spec->{dest}),
             if $spec->{required} && ! @$values;
 
         # type check
+        #
 
         # split and expand
         # Pair are processed here as well
@@ -432,49 +420,31 @@ sub _post_parse_processing {
                     = [ map { { split('=', $_) } } @$values ];
             }
         }
+
+        # choices
+        if ($spec->{choices}) {
+            my %choices = map { defined($_) ? $_ : '_undef' => 1 } @{$spec->{choices}};
+
+          VALUE:
+            for my $v (@$values) {
+                my $k = defined($v) ? $v : '_undef';
+                next VALUE if exists $choices{$k};
+
+                 return sprintf(
+                    "option %s value %s not in [ %s ]",
+                     $spec->{dest}, $v, join( ', ', @{ $spec->{choices} } ),
+                );
+            }
+        }
+
+        # type check
     }
 
-    # choices
-    # for my $spec ( @$option_specs ) {
-    #     next unless scalar(@{ $spec->{choices} || [] });
-    #     for my $v (@{$options->{ $dest2spec->{$spec->{dest}} }}) {
-    #         unless ( grep { ( !defined($v) && !defined($_) ) || $v eq $_ }
-    #             @{ $spec->{choices} } )
-    #         {
-    #             return sprintf(
-    #                 "option %s value %s not in [ %s ]",
-    #                 $spec->{dest}, $v, join( ', ', @{ $spec->{choices} } ),
-    #             );
-    #         }
-    #
-    #     }
-    # }
-
-    # type check
-
-    ########
-    # split
     ########
 
     return '';
 }
 
-sub _post_action_apply_processing {
-    # for my $spec ( @$option_specs ) {
-    #     next unless scalar(@{ $spec->{choices} || [] });
-    #     for my $v (@{$options->{ $dest2spec->{$spec->{dest}} }}) {
-    #         unless ( grep { ( !defined($v) && !defined($_) ) || $v eq $_ }
-    #             @{ $spec->{choices} } )
-    #         {
-    #             return sprintf(
-    #                 "option %s value %s not in [ %s ]",
-    #                 $spec->{dest}, $v, join( ', ', @{ $spec->{choices} } ),
-    #             );
-    #         }
-
-    #     }
-    # }
-}
 
 sub usage {
     my $self = shift;
@@ -574,7 +544,6 @@ sub _get_option_spec {
     }
 
     my $repeat = '';
-    #
 
     my $opt = join('', $name, $optional_flag, $type, $repeat, $desttype);
 

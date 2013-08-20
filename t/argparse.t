@@ -18,8 +18,7 @@ $parser->add_argument(
 );
 
 $parser->add_argument(
-    '--boo',
-    '-b',
+    '--boo', '-b',
     type     => 'bool',
     required => 1,
     dest     => 'has_boo',

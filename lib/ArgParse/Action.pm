@@ -15,9 +15,4 @@ sub new {
     return $self;
 }
 
-# sub apply {
-#    my $self = shift;
-#    my ($parser, $namespace, $values, $option_string) = @_;
-# }
-
 1;

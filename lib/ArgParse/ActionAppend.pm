@@ -1,7 +1,6 @@
 package ArgParse::ActionAppend;
 
 use strict;
-use warnings;
 use Carp;
 
 sub apply {
@@ -13,9 +12,7 @@ sub apply {
 
     my $v = $namespace->get_attr( $spec->{dest} ) || [];
 
-    push @$v,
-        map { $spec->{split} ? [ split($spec->{split}, $_) ] : $_ }
-            @{$spec->{const} || []}, @$values;
+    push @$v, @$values;
 
     $namespace->set_attr( $spec->{dest}, $v );
 }

@@ -1,12 +1,6 @@
-require 5.008001;
-
 package ArgParse::Namespace;
-{
-    $ArgParse::Namespace::VERSION='0.01';
-}
 
 use strict;
-use warnings;
 use Carp;
 
 sub new {
@@ -52,12 +46,12 @@ sub AUTOLOAD {
         if (ref($values) eq 'ARRAY') {
             return wantarray ? @$values : $values;
         } elsif (ref($values) eq 'HASH') {
-            return wantarray ? @$values : $values;
+            return wantarray ? %$values : $values;
         } else {
             return $values;
         }
     } else {
-        croak "$dest is an unknown option";
+        croak "unknown option: $dest";
     }
 
     return '';
