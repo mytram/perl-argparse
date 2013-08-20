@@ -27,7 +27,8 @@ sub apply {
 
     my $v = $values->[0];
 
-    croak 'a value is required for option: ' . $spec->{dest} if defined $v && $v eq '';
+    croak 'a value is required for option: ' . $spec->{dest}
+        if defined $v && $v eq '';
 
     croak sprintf('%s can only have one value: multiple const supplied', $spec->{dest})
             if !defined $spec->{split}

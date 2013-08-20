@@ -27,12 +27,14 @@ use constant {
 };
 
 my %Action2ClassMap = (
-	'store'        => 'ArgParse::ActionStore',
-	'store_const'  => 'ArgParse::ActionStore',
-    'append'       => 'ArgParse::ActionAppend',
-    'count'        => 'ArgParse::ActionCount',
-    'help'         => 'ArgParse::ActionHelp',
-    'version'      => 'ArgParse::ActionVersion',
+	'store'       => 'ArgParse::ActionStore',
+	'store_const' => 'ArgParse::ActionStore',
+	'store_true'  => 'ArgParse::ActionStore',
+	'store_false' => 'ArgParse::ActionStore',
+    'append'      => 'ArgParse::ActionAppend',
+    'count'       => 'ArgParse::ActionCount',
+    'help'        => 'ArgParse::ActionHelp',
+    'version'     => 'ArgParse::ActionVersion',
 );
 
 my %Type2ConstMap = (
@@ -40,7 +42,6 @@ my %Type2ConstMap = (
     'int'     => TYPE_INTEGER(),
     'str'     => TYPE_STRING(),
     'pair'    => TYPE_PAIR(),
-    'bool'    => TYPE_BOOL(),
 );
 
 #
@@ -74,8 +75,9 @@ sub init {
 
     $self->add_argument(
         '--help', '-h',
-        type => 'bool',
-        help => 'show this help message and exit',
+        action => 'store_true',
+        const  => 1,
+        help   => 'show this help message and exit',
     );
 
     # merge
@@ -137,10 +139,7 @@ sub add_argument {
     my $type_name = $args->{type} || '';
     my $type = $Type2ConstMap{$type_name} if exists $Type2ConstMap{$type_name};
 
-    if ($type == TYPE_BOOL) {
-        $args->{const} = 1 unless defined($args->{const});
-        $args->{action}  = 'store_const';
-    }
+    croak "Unknown type: $type_name" unless defined $type;
 
     ################
     # action
@@ -151,6 +150,16 @@ sub add_argument {
         if exists $Action2ClassMap{$action_name};
 
     $action = $action_name unless $action;
+
+    $type = TYPE_BOOL if $action_name =~ /_const$/;
+
+    if ($action_name eq 'store_true') {
+        $type = TYPE_BOOL;
+        $args->{const} = 1;
+    } elsif ($action_name eq 'store_false') {
+        $type = TYPE_BOOL;
+        $args->{const} = 0;
+    }
 
     {
         local $SIG{__WARN__};
@@ -177,11 +186,6 @@ sub add_argument {
     if ($action_name =~ /const$/i) {
         croak "const is required for $action_name"
             unless defined $const;
-    } elsif (defined $const) {
-        my $want_const = $action->want_const if $action->can('want_const');
-
-        croak "const is not wanted for $action_name" unless $want_const;
-
     }
 
     # hash is considered a scalar
