@@ -8,7 +8,7 @@ package ArgParse::ArgumentParser;
 use Carp;
 use warnings;
 use strict;
-use Data::Dumper;
+use Text::Wrap;
 
 use ArgParse::Namespace;
 
@@ -428,6 +428,11 @@ sub _post_parse_processing {
 sub usage {
     my $self = shift;
 
+
+    my $old_wrap_columns = $Text::Wrap::columns;
+
+    # print wrap('', '', @text);
+
     my @usage;
 
     my @option_specs = sort {
@@ -441,14 +446,14 @@ sub usage {
     } @option_specs);
 
     push @usage, sprintf('usage: %s %s', $self->prog, $flag_string);
-    push @usage, $self->description if $self->description;
+    $Text::Wrap::columns = 80;
+    push @usage, wrap('', '', $self->description);
 
     push @usage, "\n";
 
+    # TODO
     push @usage, 'positional arguments:' if exists $self->{-position_specs};
-
     push @usage, 'optional arguments:' if exists $self->{-option_specs};
-
 
     my $max = 10;
     my @item_help;
@@ -460,14 +465,28 @@ sub usage {
     }
 
     $max *= -1;
-    my $format = "  %${max}s    %s";
+    my $format = "    %${max}s    %s";
+    $Text::Wrap::columns = 60;
     for my $ih (@item_help) {
-       push @usage, sprintf($format, @$ih)
+        my $item_len = length($ih->[0]);
+        # The prefixed whitespace in subsequent lines in the wrapped
+        # help string
+        my $sub_tab = " " x (-1 * $max + 4 + 4);
+        my @help = split("\n", wrap('', '', $ih->[1]));
+
+        my $help = (shift @help) || '' ;      # head
+        $_ = $sub_tab . $_ for @help; # tail
+
+        push @usage, sprintf($format, $ih->[0], join("\n", $help, @help));
     }
+
+    $Text::Wrap::columns = $old_wrap_columns; # restore to original
 
     push @usage, "\n";
 
     print STDERR join("\n", @usage);
+
+    return \@usage;
 }
 
 # string to number
