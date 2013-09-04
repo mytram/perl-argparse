@@ -131,8 +131,9 @@ sub add_arguments {
 #    name or flags - Either a name or a list of option strings, e.g. foo or -f, --foo.
 #    action        - The basic type of action to be taken when this argument
 #                    is encountered at the command line.
-#    split         - a string by which to split the argument string e.g. a,b,c
-#                    will be split into [ 'a', 'b', 'c' ] if split => ','
+#    split          - a string by which to split the argument string e.g. a,b,c
+#                    will be split into [ 'a', 'b', 'c' ] if split =>
+#                    ','. split ought be be used with action append
 #    default       - The value produced if the argument is absent from the command line.
 #    type          - The type to which the command-line argument should be converted.
 #    choices       - A container of the allowable values for the argument.
@@ -224,7 +225,7 @@ sub add_argument {
     ################
     my $choices = $args->{choices} || undef;
     if (  $choices
-       && (ref($choices) eq 'CODE' || ref($choices) eq 'ARRAY')
+       && ref($choices) ne 'CODE' && ref($choices) ne 'ARRAY'
     ) {
         croak "Must provice choices in an array ref or a coderef";
     }
@@ -329,6 +330,10 @@ sub parse_args {
         exit(0);
     }
 
+    if (!$self->namespace) {
+        $self->namespace(ArgParse::Namespace->new);
+    }
+
     my $namespace = $self->namespace;
 
     Getopt::Long::Configure( @{ $self->parser_configs } );
@@ -365,7 +370,12 @@ sub parse_args {
     for my $spec (@option_specs) {
         # Init
         # We want to preserve already set attributes if the namespace
-        # is passed in
+        # is passed in.
+        #
+        # This is because one may want to load configs from a file
+        # into a namespace and then use the same namespace for parsing
+        # configs from command line.
+        #
         $namespace->set_attr($spec->{dest}, undef)
             unless defined($namespace->get_attr($spec->{dest}));
 
@@ -390,13 +400,14 @@ sub parse_args {
     }
 
     # parse positional
+    $self->_parse_positional_args();
 
     return $namespace;
 }
 
 sub _parse_positional_args {
     my $self = shift;
-    #
+    # TODO
 }
 
 sub _post_parse_processing {
