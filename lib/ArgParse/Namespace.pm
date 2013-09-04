@@ -1,17 +1,16 @@
 package ArgParse::Namespace;
 
-use strict;
 use Carp;
+use strict;
+use warnings;
 
 sub new {
     my $class = shift;
     my $real_class = ref $class || $class;
 
-    my $self = { @_ };
+    my $self = {};
 
     bless $self, $real_class;
-
-    return $self;
 }
 
 sub set_attr {

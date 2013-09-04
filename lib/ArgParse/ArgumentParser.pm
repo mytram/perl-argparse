@@ -5,9 +5,9 @@ package ArgParse::ArgumentParser;
     $ArgParse::ArgumentParser::VERSION = '0.01';
 }
 
+use Moo;
 use Carp;
-use warnings;
-use strict;
+
 use Text::Wrap;
 
 use ArgParse::Namespace;
@@ -42,34 +42,58 @@ my %Type2ConstMap = (
     'Bool'    => TYPE_BOOL(),
 );
 
-#
-sub new {
-    my $class = shift;
-    my $real_class = ref $class || $class;
+=item prog() - Read/write
 
-    my $args = { @_ };
+Program name. Default $0
 
-    my $self = {};
+=cut
 
-    bless $self, $real_class;
+has prog => ( is => 'rw', required => 1, default => sub { $0 }, );
 
-    $self->init($args);
+=item description() - Read/write
 
-    return $self;
-}
+The description of the progam
 
-sub init {
+=cut
+
+has description => ( is => 'rw', required => 1, default => sub { '' }, );
+
+=item namespace() - Read/write
+
+Contains the parsed results.
+
+=cut
+
+has namespace => ( is => 'rw', required => 1, default => sub { ArgParse::Namespace->new }, );
+
+=item parent - Readonly
+
+=cut
+
+has parent => (
+    is => 'ro',
+       isa => sub {
+           my $parent_class = ref $_[0] || $_[0];
+        die 'Parent must be an ArgumentParser'
+            unless $parent_class->isa(__PACKAGE__);
+    },
+    required => 0,
+);
+
+=item parser_configs - Read/write
+
+The configurations that will be passed to Getopt::Long::Configure(
+$self->parser_configs ) when parse_args is invoked.
+
+=cut
+
+has parser_configs => ( is => 'rw', required => 1, default => sub { [] }, );
+
+# internal properties
+has _option_position => ( is => 'rw', required => 1, default => sub { 0 } );
+
+sub BUILD {
     my $self = shift;
-    my $args = shift;
-
-    $self->{'-prog'}           = delete $args->{'prog'} || $0;
-    $self->{'-description'}    = delete $args->{'description'} || '';
-    $self->{'-parser_configs'} = delete $args->{'parser_configs'}  || [];
-    $self->{'-option_position'} = 0;
-
-    while( my ($key, $value) = each %$args ) {
-        $self->{"-$key"} = $value;
-    }
 
     $self->add_argument(
         '--help', '-h',
@@ -77,17 +101,23 @@ sub init {
         help => 'show this help message and exit',
     );
 
+    $self->add_argument(
+        '--verbose', '-v',
+        type => 'Bool',
+        help => 'verbose output',
+    );
+
     # merge
-    if (my $p = $args->{parent}) {
-        $self->add_arguments( @ { $p->{-pristine_add_arguments} || [] } );
+    if ($self->parent) {
+        $self->add_arguments( @ { $self->parent->{-pristine_add_arguments} || [] } );
     }
 }
 
-sub prog           { $_[0]->{'-prog'} }
-sub description    { $_[0]->{'-description'} }
-sub parser_configs {
-    wantarray ? @{ $_[0]->{'-parser_configs'} } : $_[0]->{'-parser_configs'}
-}
+=head3 add_arguments([arg_spec], [arg_spec1], ...)
+
+Add multiple arguments.
+
+=cut
 
 sub add_arguments {
     my $self = shift;
@@ -193,8 +223,10 @@ sub add_argument {
     # choices
     ################
     my $choices = $args->{choices} || undef;
-    if ($choices && ref($choices) eq 'ARRAY') {
-        croak "Must provice choices in an array ref";
+    if (  $choices
+       && (ref($choices) eq 'CODE' || ref($choices) eq 'ARRAY')
+    ) {
+        croak "Must provice choices in an array ref or a coderef";
     }
 
     ################
@@ -255,6 +287,9 @@ sub add_argument {
         $self->{-option_specs}{$spec->{dest}} = $spec;
     } else {
         $self->{-position_specs}{$spec->{dest}} = $spec;
+
+        # TODO
+        croak "Postional arguments are not supported yet!"
     }
 
     return $self;
@@ -294,9 +329,9 @@ sub parse_args {
         exit(0);
     }
 
-    my $namespace = ArgParse::Namespace->new();
+    my $namespace = $self->namespace;
 
-    Getopt::Long::Configure( $self->parser_configs );
+    Getopt::Long::Configure( @{ $self->parser_configs } );
 
     my $options   = {};
     my $dest2spec = {};
@@ -329,7 +364,10 @@ sub parse_args {
     # action
     for my $spec (@option_specs) {
         # Init
-        $namespace->set_attr($spec->{dest}, undef);
+        # We want to preserve already set attributes if the namespace
+        # is passed in
+        $namespace->set_attr($spec->{dest}, undef)
+            unless defined($namespace->get_attr($spec->{dest}));
 
         my $action = $spec->{action};
 
@@ -404,20 +442,30 @@ sub _post_parse_processing {
 
         # choices
         if ( $spec->{choices} ) {
-            my %choices = map { defined($_) ? $_ : '_undef' => 1 } @{$spec->{choices}};
 
-          VALUE:
-            for my $v (@$values) {
-                my $k = defined($v) ? $v : '_undef';
-                next VALUE if exists $choices{$k};
+            if (ref($spec->{choices}) eq 'CODE') {
+                for my $v (@$values) {
+                    $spec->{choices}->($v);
+                }
+            } else {
+                my %choices =
+                    map { defined($_) ? $_ : '_undef' => 1 }
+                    @{$spec->{choices}};
 
-                 return sprintf(
-                    "option %s value %s not in allowed choices: [ %s ]",
-                     $spec->{dest}, $v, join( ', ', @{ $spec->{choices} } ),
-                );
+              VALUE:
+                for my $v (@$values) {
+                    my $k = defined($v) ? $v : '_undef';
+                    next VALUE if exists $choices{$k};
+
+                    return sprintf(
+                        "option %s value %s not in allowed choices: [ %s ]",
+                        $spec->{dest}, $v, join( ', ', @{ $spec->{choices} } ),
+                    );
+                }
             }
         }
 
+        # TODO
         # type convert
     }
 
@@ -428,10 +476,7 @@ sub _post_parse_processing {
 sub usage {
     my $self = shift;
 
-
     my $old_wrap_columns = $Text::Wrap::columns;
-
-    # print wrap('', '', @text);
 
     my @usage;
 
@@ -489,7 +534,9 @@ sub usage {
     return \@usage;
 }
 
+# TODO - Not used
 # string to number
+#
 sub _ston {
     my $self = shift;
     my $s = shift;

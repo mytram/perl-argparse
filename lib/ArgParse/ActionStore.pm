@@ -29,10 +29,9 @@ sub apply {
         return;
     }
 
-    unless (@$values) {
-        $namespace->set_attr($spec->{dest}, undef);
-        return;
-    }
+    # Don't set it to undef. We may operate on a namespace with this
+    # attr already set. In that case we don't want to override it.
+    return unless @$values;
 
     my $v = $values->[0];
 
