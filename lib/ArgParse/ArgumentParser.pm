@@ -64,7 +64,14 @@ Contains the parsed results.
 
 =cut
 
-has namespace => ( is => 'rw', required => 1, default => sub { ArgParse::Namespace->new }, );
+has namespace => (
+    is => 'rw',
+    isa => sub {
+        return undef unless $_[0]; # allow undef
+        my $class = ref $_[0] || $_[0];
+        croak "Must provide a Namespace" unless $class->isa('ArgParse::Namespace');
+    },
+ );
 
 =item parent - Readonly
 
@@ -330,11 +337,9 @@ sub parse_args {
         exit(0);
     }
 
-    if (!$self->namespace) {
-        $self->namespace(ArgParse::Namespace->new);
-    }
+    my $namespace = $self->namespace || ArgParse::Namespace->new;
 
-    my $namespace = $self->namespace;
+    $self->namespace($namespace);
 
     Getopt::Long::Configure( @{ $self->parser_configs } );
 
