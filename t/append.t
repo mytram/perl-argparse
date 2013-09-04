@@ -8,7 +8,10 @@ $p = ArgParse::ArgumentParser->new();
 ok($p, "new argparser");
 
 # Miminal set up
-$p->add_argument('--email', '-e', action => 'append');
+$p->add_argument(
+    '--email', '-e',
+    action => 'append',
+);
 
 $line = '-e abc@perl.org -e xyz@perl.org';
 
@@ -20,10 +23,11 @@ ok(scalar @emails == 2, 'append - minimal setup');
 
 $p->add_argument('--foo');
 $line = '--foo 1';
+$p->namespace(undef);
 $ns = $p->parse_args(split(' ', $line));
 @emails = $ns->email;
 diag(join ', ', @emails);
-ok(scalar @emails == 0, 'append - minimal setup');
+ok(scalar @emails == 0, 'append - minimal setup,not specified');
 
 $p = ArgParse::ArgumentParser->new();
 $p->add_argument('--foo');
@@ -44,6 +48,7 @@ ok(scalar @emails == 1, 'append - required with default');
 
 # append default but specified
 $line = '--foo 1 -e abc@perl.org';
+$p->namespace(undef);
 $ns = $p->parse_args(split(' ', $line));
 
 @emails = $ns->email;

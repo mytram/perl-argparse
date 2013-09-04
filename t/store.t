@@ -9,19 +9,22 @@ ok($p, "new argparser");
 
 $p->add_argument('--foo');
 
-$p->add_argument('-v', type => 'Bool');
+$p->add_argument('--vv', type => 'Bool');
 $p->add_argument('-q', type => 'Bool', default => 1);
 
-$line = '-v';
+$line = '--vv';
 
 $ns = $p->parse_args($line);
 
-ok ($ns->v, 'v - true');
+ok ($ns->vv, 'v - true');
 ok ($ns->q, 'q - true');
 
 $ns = $p->parse_args(split(' ', '-q'));
 
-ok (!$ns->v, 'v - false');
+ok (!$ns->vv, 'vv - false');
 ok (!$ns->q, 'q - false');
+
+ok ($ns->no_vv, 'no_vv - true');
+ok ($ns->no_q, 'no_q - true');
 
 done_testing;
