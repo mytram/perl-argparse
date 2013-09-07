@@ -1,9 +1,9 @@
-require 5.008001;
-
 package ArgParse::ArgumentParser;
 {
     $ArgParse::ArgumentParser::VERSION = '0.01';
 }
+
+require 5.008001;
 
 use Moo;
 use Carp;
@@ -157,7 +157,7 @@ sub add_argument {
 
     push @{ $self->{-pristine_add_arguments} }, [ @_ ];
 
-    my ($name, $flags, $rest) = $self->_parse_args_for_name_and_flags([ @_ ]);
+    my ($name, $flags, $rest) = $self->_parse_for_name_and_flags([ @_ ]);
 
     croak "Incorrect arguments" if scalar(@$rest) % 2;
 
@@ -303,7 +303,7 @@ sub add_argument {
     return $self;
 }
 
-sub _parse_args_for_name_and_flags {
+sub _parse_for_name_and_flags {
     my $self = shift;
     my $args = shift;
 
@@ -324,6 +324,13 @@ sub _parse_args_for_name_and_flags {
 
     return ( $name, \@flags, $args );
 }
+
+=head3 parse_args([@_])
+
+Parse @ARGV if called without passing arguments. It returns an
+instance of ArgParse::Namespace upon success
+
+=cut
 
 sub parse_args {
     my $self = shift;
@@ -367,6 +374,8 @@ sub parse_args {
         }
     }
 
+    Getopt::Long::Configure('default'); # Restore to default
+
     my $error = $self->_post_parse_processing( \@option_specs, $options, $dest2spec );
 
     croak $error if $error;
@@ -390,14 +399,11 @@ sub parse_args {
             $spec,
             $namespace,
             $options->{ $dest2spec->{$spec->{dest}} },
-            $spec->{name}
         );
     }
 
     # positional arguments
     $self->{-argv} = \@argv;
-
-    Getopt::Long::Configure('default');
 
     if ($namespace->get_attr('help')) {
         my $usage = $self->usage();
@@ -405,6 +411,7 @@ sub parse_args {
     }
 
     # parse positional
+    #
     $self->_parse_positional_args();
 
     return $namespace;
@@ -412,7 +419,18 @@ sub parse_args {
 
 sub _parse_positional_args {
     my $self = shift;
-    # TODO
+    my @specs = sort {
+        $a->{position} <=> $b->{position}
+    } values %{$self->{-position_specs}};
+
+    my $options   = {};
+
+    for my $spec ( @specs ) {
+        my @values =  ();
+        $options->{ $spec->{dest} } = \@values;
+    }
+
+    # nargs
 }
 
 sub _post_parse_processing {
@@ -432,9 +450,9 @@ sub _post_parse_processing {
 
         # required
         return sprintf('%s is required', $spec->{dest}),
-            if $spec->{required} && ! @$values;
-
-        # type check
+            if $spec->{required}
+                && ! @$values
+                && defined $self->namespace->get_attr($spec->{dest});
 
         # split and expand
         # Pair are processed here as well
@@ -612,3 +630,103 @@ sub _get_option_spec {
 }
 
 1;
+
+# perldoc
+
+=pod
+
+=head1 NAME
+
+ArgParse::ArgumentParser - A Perl's Argument Parser
+
+=head1 VERSION
+
+version 0.01
+
+=head1 SYNOPSIS
+
+    use ArgParse::ArgumentParser;
+
+	$ap = ArgParse::ArgumentParser->new(
+		prog        => 'MyProgramName',
+		description => 'This is a program',
+	);
+
+	# Parse an option: '--foo value' or '-f value'
+	$ap->add_argument('--foo', '-f', required => 1);
+
+	# Parse a boolean: '--bool' or '-b' using a different name from
+	# the option
+	$ap->add_argument('--bool', '-b', type => 'Bool', dest => 'boo');
+
+	# Parse a positonal option
+	$ap->add_arguement('command', required => 1);
+
+	# $ns is also accessible via $ap->namespace
+	my $ns = $ap->parse_args(split(' ', 'test -f 1 -b');
+
+	say $ns->command; # 'test'
+    say $ns->foo;     # 1
+	say $ns->boo      # 1
+	say $ns->no_boo   # 0 - 'no_' is added for boolean options
+
+	# You can continue to add arguments and parse them again
+	# $ap->namespace is accumulatively populated
+
+	# Parse an option and split the value into an array of values
+    # action => 'append' is required for multiple value options
+	$ap->add_argument('--emails', action => 'append', split => ',');
+	$ns = $ap->parse_args(split(' ', '--emails a@perl.org,b@perl.org,c@perl.org'));
+
+	say join('|', $ns->emails); # a@perl.org|b@perl.org|c@perl.org
+
+	# Parse an option as key,value pairs
+    # action => 'append' is also required for multiple value hash options
+
+	$ap->add_argument('--param', type => 'Pair', action => 'append', split => ',');
+	$ns = $ap->parse_args(split(' ', '--param a=1,b=2,c=3'));
+
+	say $ns->param->{a}; # 1
+	say $ns->param->{b}; # 2
+	say $ns->param->{c}; # 3
+
+	# You can use choice to restrict values
+	$ap->add_arguemnt('--env', choices => [ 'dev', 'prod' ]);
+
+	# or use case-insensitive choices
+	# Override the previous option
+	$ap->add_arguemnt('--env', choices_i => [ 'dev', 'prod' ]);
+
+	# or use a coderef
+	# Override the previous option
+	$ap->add_argument(
+		'--env',
+		choices => sub {
+			die "--env invalid values" if $_[0] !~ /^(dev|prod)$/i;
+		},
+	);
+
+
+=head1 DESCRIPTIOIN
+
+=head2 USAGE
+
+=head2 METHODS
+
+=head3 Constructor
+
+=head1 SEE ALSO
+
+Python's argparse
+
+=head1 AUTHOR
+
+Mytram <mytram2@gmail.com>
+
+=head1 COPYRIGHT AND LICENSE
+
+This is free software.
+
+=cut
+
+__END__
