@@ -1,9 +1,9 @@
+require 5.008001;
+
 package ArgParse::ArgumentParser;
 {
     $ArgParse::ArgumentParser::VERSION = '0.01';
 }
-
-require 5.008001;
 
 use Moo;
 use Carp;
@@ -231,10 +231,11 @@ sub add_argument {
     # choices
     ################
     my $choices = $args->{choices} || undef;
-    if (  $choices
-       && ref($choices) ne 'CODE' && ref($choices) ne 'ARRAY'
-    ) {
-        croak "Must provice choices in an array ref or a coderef";
+    if (   $choices
+        && ref($choices) ne 'CODE'
+        && ref($choices) ne 'ARRAY' )
+    {
+        croak "Must provide choices in an arrayref or a coderef";
     }
 
     ################
@@ -279,6 +280,7 @@ sub add_argument {
         name     => $name,
         flags    => \@flags,
         action   => $action,
+        nargs	 => $args->{nargs},
         split    => $args->{split},
         required => $args->{required} || '',
         type     => $type,
@@ -295,9 +297,6 @@ sub add_argument {
         $self->{-option_specs}{$spec->{dest}} = $spec;
     } else {
         $self->{-position_specs}{$spec->{dest}} = $spec;
-
-        # TODO
-        croak "Postional arguments are not supported yet!"
     }
 
     return $self;
@@ -345,8 +344,24 @@ sub parse_args {
     }
 
     my $namespace = $self->namespace || ArgParse::Namespace->new;
-
     $self->namespace($namespace);
+
+    $self->{-argv} = \@argv;
+
+    $self->_parse_optional_args();
+
+    $self->_parse_positional_args();
+
+    if ($namespace->get_attr('help')) {
+        my $usage = $self->usage();
+        exit(0);
+    }
+
+    return $namespace;
+}
+
+sub _parse_optional_args {
+    my $self = shift;
 
     Getopt::Long::Configure( @{ $self->parser_configs } );
 
@@ -367,77 +382,75 @@ sub parse_args {
         my $warn;
         local $SIG{__WARN__} = sub { $warn = shift };
 
-        my $result = GetOptionsFromArray( \@argv, %$options );
+        my $result = GetOptionsFromArray( $self->{-argv}, %$options );
 
         if ($warn || !$result) {
             croak "Getoptions error: $warn";
         }
     }
 
-    Getopt::Long::Configure('default'); # Restore to default
+    Getopt::Long::Configure('default');
 
     my $error = $self->_post_parse_processing( \@option_specs, $options, $dest2spec );
 
     croak $error if $error;
 
-    # action
-    for my $spec (@option_specs) {
-        # Init
-        # We want to preserve already set attributes if the namespace
-        # is passed in.
-        #
-        # This is because one may want to load configs from a file
-        # into a namespace and then use the same namespace for parsing
-        # configs from command line.
-        #
-        $namespace->set_attr($spec->{dest}, undef)
-            unless defined($namespace->get_attr($spec->{dest}));
-
-        my $action = $spec->{action};
-
-        $action->apply(
-            $spec,
-            $namespace,
-            $options->{ $dest2spec->{$spec->{dest}} },
-        );
-    }
-
-    # positional arguments
-    $self->{-argv} = \@argv;
-
-    if ($namespace->get_attr('help')) {
-        my $usage = $self->usage();
-        exit(0);
-    }
-
-    # parse positional
-    #
-    $self->_parse_positional_args();
-
-    return $namespace;
+    $self->_apply_action(\@option_specs, $options, $dest2spec);
 }
 
 sub _parse_positional_args {
     my $self = shift;
+    my $options   = {};
+    my $dest2spec = {};
+
     my @specs = sort {
         $a->{position} <=> $b->{position}
     } values %{$self->{-position_specs}};
 
-    my $options   = {};
+  POSITION_SPEC:
+    for my $spec (@specs) {
+        $dest2spec->{$spec->{dest}} = $spec->{dest};
+        my @values = ();
+        # Always assigne values to an option
+        $options->{$spec->{dest}} = \@values;
 
-    for my $spec ( @specs ) {
-        my @values =  ();
-        $options->{ $spec->{dest} } = \@values;
+        next unless @{$self->{-argv}};
+
+        if ($spec->{type} == TYPE_BOOL) {
+            croak 'Bool not allowed for positional arguments';
+        }
+
+        my $number = 1;
+        if (defined $spec->{nargs}) {
+            my $nargs = $spec->{nargs};
+            if ($nargs eq '?') {
+                $number = 1;
+            } elsif ($nargs eq '+') {
+                $number = 1;
+                croak "too few arguments: narg='+'" unless @{$self->{-argv}};
+            } elsif ($nargs eq '*') { # remainder
+                $number = scalar @{$self->{-argv}};
+            } elsif ($nargs !~ /^\d*$/) {
+                croak 'invalid nargs';
+            } else {
+                $number = $nargs;
+            }
+        }
+
+        if (scalar(@{$self->{-argv}})) {
+            push @values, splice(@{$self->{-argv}}, 0, $number);
+        }
     }
 
-    # nargs
+    my $error = $self->_post_parse_processing(\@specs, $options, $dest2spec);
+    croak $error if $error;
+
+    $self->_apply_action(\@specs, $options, $dest2spec);
 }
 
 sub _post_parse_processing {
     my $self         = shift;
-    my $option_specs = shift;
-    my $options      = shift;
-    my $dest2spec    = shift;
+    my ($option_specs, $options, $dest2spec) = @_;
 
     #
     for my $spec ( @$option_specs ) {
@@ -506,6 +519,30 @@ sub _post_parse_processing {
     return '';
 }
 
+sub _apply_action {
+    my $self = shift;
+    my ($specs, $options, $dest2spec) = @_;
+
+   for my $spec (@$specs) {
+        # Init
+        # We want to preserve already set attributes if the namespace
+        # is passed in.
+        #
+        # This is because one may want to load configs from a file
+        # into a namespace and then use the same namespace for parsing
+        # configs from command line.
+        #
+        $self->namespace->set_attr($spec->{dest}, undef)
+            unless defined($self->namespace->get_attr($spec->{dest}));
+
+        $spec->{action}->apply(
+            $spec,
+            $self->namespace,
+            $options->{ $dest2spec->{$spec->{dest}} },
+            $spec->{name}
+        );
+    }
+}
 
 sub usage {
     my $self = shift;
@@ -531,12 +568,34 @@ sub usage {
     push @usage, "\n";
 
     # TODO
-    push @usage, 'positional arguments:' if exists $self->{-position_specs};
-    push @usage, 'optional arguments:' if exists $self->{-option_specs};
+    if (exists $self->{-position_specs}) {
+        push @usage, 'positional arguments:';
+        push @usage, @{ $self->_format_usage_by_spec( $self->{-position_specs} ) };
+    }
 
+    if ( exists $self->{-option_specs} ) {
+        push @usage, 'optional arguments:';
+        push @usage, @{ $self->_format_usage_by_spec( $self->{-option_specs} ) };
+    }
+
+    $Text::Wrap::columns = $old_wrap_columns; # restore to original
+
+    push @usage, "\n";
+
+    print STDERR join("\n", @usage);
+
+    return \@usage;
+}
+
+sub _format_usage_by_spec {
+    my $self = shift;
+    my $specs = shift;
+
+    my @usage;
     my $max = 10;
     my @item_help;
-    for my $spec (@option_specs) {
+
+    for my $spec (@$specs) {
         my $item = sprintf("%s %s", join(', ',  @{$spec->{flags}}), $spec->{metavar});
         my $len = length($item);
         $max = $len if $len > $max;
@@ -558,12 +617,6 @@ sub usage {
 
         push @usage, sprintf($format, $ih->[0], join("\n", $help, @help));
     }
-
-    $Text::Wrap::columns = $old_wrap_columns; # restore to original
-
-    push @usage, "\n";
-
-    print STDERR join("\n", @usage);
 
     return \@usage;
 }
