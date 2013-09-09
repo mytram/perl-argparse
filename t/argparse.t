@@ -34,7 +34,7 @@ $parser->add_argument(
 
 throws_ok( sub {
                $ns = $parser->parse_args(split(/ /, '-foo 10 20 30 --array a --array b --array c'));
-}, qr/required/, 'required option');
+}, qr/required/, 'required option: bool');
 
 $ns = $parser->parse_args(split(/ /, '-foo 10 20 30 -b --array a --array b --array c'));
 

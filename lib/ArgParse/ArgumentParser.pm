@@ -14,6 +14,13 @@ use ArgParse::Namespace;
 
 use Getopt::Long qw(GetOptionsFromArray);
 
+# Really types should be one of the followings:
+# Count: Count
+# Bool: Store
+# Scalar: Store
+# Array: Append
+# Key-value Pair: Append
+
 use constant {
     TYPE_UNDEF   => 0,
     TYPE_STRING  => 1,
@@ -26,12 +33,14 @@ use constant {
     CONST_FALSE  => 0,
 };
 
+# Allow customization
+# default actions
 my %Action2ClassMap = (
-	'store'       => 'ArgParse::ActionStore',
-    'append'      => 'ArgParse::ActionAppend',
-    'count'       => 'ArgParse::ActionCount',
-    'help'        => 'ArgParse::ActionHelp',
-    'version'     => 'ArgParse::ActionVersion',
+	'_store'       => 'ArgParse::ActionStore',
+    '_append'      => 'ArgParse::ActionAppend',
+    '_count'       => 'ArgParse::ActionCount',
+    '_help'        => 'ArgParse::ActionHelp',
+    '_version'     => 'ArgParse::ActionVersion',
 );
 
 my %Type2ConstMap = (
@@ -42,27 +51,17 @@ my %Type2ConstMap = (
     'Bool'    => TYPE_BOOL(),
 );
 
-=item prog() - Read/write
-
-Program name. Default $0
-
-=cut
+# Program name. Default $0
 
 has prog => ( is => 'rw', required => 1, default => sub { $0 }, );
 
-=item description() - Read/write
-
-The description of the progam
-
-=cut
+# The description of the progam
 
 has description => ( is => 'rw', required => 1, default => sub { '' }, );
 
-=item namespace() - Read/write
+# namespace() - Read/write
 
 Contains the parsed results.
-
-=cut
 
 has namespace => (
     is => 'rw',
@@ -73,9 +72,7 @@ has namespace => (
     },
  );
 
-=item parent - Readonly
-
-=cut
+# parent - Readonly
 
 has parent => (
     is => 'ro',
@@ -87,12 +84,11 @@ has parent => (
     required => 0,
 );
 
-=item parser_configs - Read/write
+# parser_configs - Read/write
 
-The configurations that will be passed to Getopt::Long::Configure(
-$self->parser_configs ) when parse_args is invoked.
+#The configurations that will be passed to Getopt::Long::Configure(
+#$self->parser_configs ) when parse_args is invoked.
 
-=cut
 
 has parser_configs => ( is => 'rw', required => 1, default => sub { [] }, );
 
@@ -120,11 +116,8 @@ sub BUILD {
     }
 }
 
-=head3 add_arguments([arg_spec], [arg_spec1], ...)
-
-Add multiple arguments.
-
-=cut
+# add_arguments([arg_spec], [arg_spec1], ...)
+# Add multiple arguments.
 
 sub add_arguments {
     my $self = shift;
@@ -324,12 +317,11 @@ sub _parse_for_name_and_flags {
     return ( $name, \@flags, $args );
 }
 
-=head3 parse_args([@_])
+# parse_args([@_])
 
-Parse @ARGV if called without passing arguments. It returns an
-instance of ArgParse::Namespace upon success
+# Parse @ARGV if called without passing arguments. It returns an
+# instance of ArgParse::Namespace upon success
 
-=cut
 
 sub parse_args {
     my $self = shift;
@@ -465,7 +457,7 @@ sub _post_parse_processing {
         return sprintf('%s is required', $spec->{dest}),
             if $spec->{required}
                 && ! @$values
-                && defined $self->namespace->get_attr($spec->{dest});
+                && ! defined $self->namespace->get_attr($spec->{dest});
 
         # split and expand
         # Pair are processed here as well
@@ -697,68 +689,67 @@ ArgParse::ArgumentParser - A Perl's Argument Parser
 version 0.01
 
 =head1 SYNOPSIS
-
-    use ArgParse::ArgumentParser;
-
-	$ap = ArgParse::ArgumentParser->new(
-		prog        => 'MyProgramName',
-		description => 'This is a program',
-	);
-
-	# Parse an option: '--foo value' or '-f value'
-	$ap->add_argument('--foo', '-f', required => 1);
-
-	# Parse a boolean: '--bool' or '-b' using a different name from
-	# the option
-	$ap->add_argument('--bool', '-b', type => 'Bool', dest => 'boo');
-
-	# Parse a positonal option
-	$ap->add_arguement('command', required => 1);
-
-	# $ns is also accessible via $ap->namespace
-	my $ns = $ap->parse_args(split(' ', 'test -f 1 -b');
-
-	say $ns->command; # 'test'
-    say $ns->foo;     # 1
-	say $ns->boo      # 1
-	say $ns->no_boo   # 0 - 'no_' is added for boolean options
-
-	# You can continue to add arguments and parse them again
-	# $ap->namespace is accumulatively populated
-
-	# Parse an option and split the value into an array of values
-    # action => 'append' is required for multiple value options
-	$ap->add_argument('--emails', action => 'append', split => ',');
-	$ns = $ap->parse_args(split(' ', '--emails a@perl.org,b@perl.org,c@perl.org'));
-
-	say join('|', $ns->emails); # a@perl.org|b@perl.org|c@perl.org
-
-	# Parse an option as key,value pairs
-    # action => 'append' is also required for multiple value hash options
-
-	$ap->add_argument('--param', type => 'Pair', action => 'append', split => ',');
-	$ns = $ap->parse_args(split(' ', '--param a=1,b=2,c=3'));
-
-	say $ns->param->{a}; # 1
-	say $ns->param->{b}; # 2
-	say $ns->param->{c}; # 3
-
-	# You can use choice to restrict values
-	$ap->add_arguemnt('--env', choices => [ 'dev', 'prod' ]);
-
-	# or use case-insensitive choices
-	# Override the previous option
-	$ap->add_arguemnt('--env', choices_i => [ 'dev', 'prod' ]);
-
-	# or use a coderef
-	# Override the previous option
-	$ap->add_argument(
-		'--env',
-		choices => sub {
-			die "--env invalid values" if $_[0] !~ /^(dev|prod)$/i;
-		},
-	);
-
+ 
+ use ArgParse::ArgumentParser;
+ 
+ $ap = ArgParse::ArgumentParser->new(
+ 	prog        => 'MyProgramName',
+ 	description => 'This is a program',
+ );
+ 
+ # Parse an option: '--foo value' or '-f value'
+ $ap->add_argument('--foo', '-f', required => 1);
+ 
+ # Parse a boolean: '--bool' or '-b' using a different name from
+ # the option
+ $ap->add_argument('--bool', '-b', type => 'Bool', dest => 'boo');
+ 
+ # Parse a positonal option
+ $ap->add_arguement('command', required => 1);
+ 
+ # $ns is also accessible via $ap->namespace
+ my $ns = $ap->parse_args(split(' ', 'test -f 1 -b');
+ 
+ say $ns->command; # 'test'
+ say $ns->foo;     # 1
+ say $ns->boo      # 1
+ say $ns->no_boo   # 0 - 'no_' is added for boolean options
+ 
+ # You can continue to add arguments and parse them again
+ # $ap->namespace is accumulatively populated
+ 
+ # Parse an option and split the value into an array of values
+ # action => 'append' is required for multiple value options
+ $ap->add_argument('--emails', action => 'append', split => ',');
+ $ns = $ap->parse_args(split(' ', '--emails a@perl.org,b@perl.org,c@perl.org'));
+ 
+ say join('|', $ns->emails); # a@perl.org|b@perl.org|c@perl.org
+ 
+ # Parse an option as key,value pairs
+ # action => 'append' is also required for multiple value hash options
+ 
+ $ap->add_argument('--param', type => 'Pair', action => 'append', split => ',');
+ $ns = $ap->parse_args(split(' ', '--param a=1,b=2,c=3'));
+ 
+ say $ns->param->{a}; # 1
+ say $ns->param->{b}; # 2
+ say $ns->param->{c}; # 3
+ 
+ # You can use choice to restrict values
+ $ap->add_arguemnt('--env', choices => [ 'dev', 'prod' ]);
+ 
+ # or use case-insensitive choices
+ # Override the previous option
+ $ap->add_arguemnt('--env', choices_i => [ 'dev', 'prod' ]);
+ 
+ # or use a coderef
+ # Override the previous option
+ $ap->add_argument(
+ 	'--env',
+ 	choices => sub {
+ 		die "--env invalid values" if $_[0] !~ /^(dev|prod)$/i;
+ 	},
+ );
 
 =head1 DESCRIPTIOIN
 
