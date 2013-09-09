@@ -9,7 +9,7 @@ ok($p, "new argparser");
 
 $p->add_argument(
     '--e',
-    action => 'append',
+    type => 'Array',
     split => ',',
 );
 
@@ -23,7 +23,6 @@ ok (join(',', @e) eq 'a,b,c', "split value");
 
 $p->add_argument(
     '--pairs',
-    action => 'append',
     split => ',',
     type   => 'Pair',
 );

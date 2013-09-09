@@ -8,29 +8,28 @@ package ArgParse::ArgumentParser;
 use Moo;
 use Carp;
 
+use Getopt::Long qw(GetOptionsFromArray);
 use Text::Wrap;
 
 use ArgParse::Namespace;
 
-use Getopt::Long qw(GetOptionsFromArray);
-
-# Really types should be one of the followings:
-# Count: Count
-# Bool: Store
-# Scalar: Store
-# Array: Append
-# Key-value Pair: Append
-
 use constant {
-    TYPE_UNDEF   => 0,
-    TYPE_STRING  => 1,
-    TYPE_INTEGER => 2,
-    TYPE_FLOAT   => 3,
-    TYPE_PAIR	 => 4, # key=value pair
-    TYPE_BOOL	 => 5,
+    TYPE_UNDEF  => 0,
+    TYPE_SCALAR => 1,
+    TYPE_ARRAY  => 2,
+    TYPE_COUNT  => 3,
+    TYPE_PAIR	=> 4, # key=value pair
+    TYPE_BOOL	=> 5,
 
     CONST_TRUE   => 1,
     CONST_FALSE  => 0,
+
+    # Expose these?
+	ScalarArg => 'scalar',
+	ArrayArg  => 'Array',
+    PairArg   => 'Pair',
+    CountArg  => 'Count',
+    BoolArg   => 'Bool',
 };
 
 # Allow customization
@@ -45,8 +44,9 @@ my %Action2ClassMap = (
 
 my %Type2ConstMap = (
     ''        => TYPE_UNDEF(),
-    'Int'     => TYPE_INTEGER(),
-    'Str'     => TYPE_STRING(),
+    'Scalar'  => TYPE_SCALAR(),
+    'Array'   => TYPE_ARRAY(),
+	'Count'   => TYPE_COUNT(),
     'Pair'    => TYPE_PAIR(),
     'Bool'    => TYPE_BOOL(),
 );
@@ -61,7 +61,7 @@ has description => ( is => 'rw', required => 1, default => sub { '' }, );
 
 # namespace() - Read/write
 
-Contains the parsed results.
+# Contains the parsed results.
 
 has namespace => (
     is => 'rw',
@@ -70,7 +70,7 @@ has namespace => (
         my $class = ref $_[0] || $_[0];
         croak "Must provide a Namespace" unless $class->isa('ArgParse::Namespace');
     },
- );
+);
 
 # parent - Readonly
 
@@ -88,7 +88,6 @@ has parent => (
 
 #The configurations that will be passed to Getopt::Long::Configure(
 #$self->parser_configs ) when parse_args is invoked.
-
 
 has parser_configs => ( is => 'rw', required => 1, default => sub { [] }, );
 
@@ -118,7 +117,7 @@ sub BUILD {
 
 # add_arguments([arg_spec], [arg_spec1], ...)
 # Add multiple arguments.
-
+# Interace method
 sub add_arguments {
     my $self = shift;
 
@@ -172,12 +171,18 @@ sub add_argument {
         if (!defined $args->{default}) {
             $args->{default} = 0; # False if unspecified, or True
         }
+    } elsif ($type == TYPE_COUNT) {
+        $args->{action} = '_count' unless defined $args->{action};
+    } elsif ($type == TYPE_ARRAY || $type == TYPE_PAIR) {
+        $args->{action} = '_append' unless defined $args->{action};
+    } else {
+        # pass
     }
 
     ################
     # action
     ################
-    my $action_name = $args->{action} || 'store';
+    my $action_name = $args->{action} || '_store';
 
     my $action = $Action2ClassMap{$action_name}
         if exists $Action2ClassMap{$action_name};
@@ -322,6 +327,7 @@ sub _parse_for_name_and_flags {
 # Parse @ARGV if called without passing arguments. It returns an
 # instance of ArgParse::Namespace upon success
 
+# Interface
 
 sub parse_args {
     my $self = shift;
@@ -613,26 +619,6 @@ sub _format_usage_by_spec {
     return \@usage;
 }
 
-# TODO - Not used
-# string to number
-#
-sub _ston {
-    my $self = shift;
-    my $s = shift;
-
-    return 0.0 unless $s;
-
-    my $f = $s;
-    {
-        my $warn;
-        local $SIG{__WARN__} = sub { $warn = shift; };
-        $f += 0.0;
-        croak "$s is not a number";
-    }
-
-    return $f;
-}
-
 # translate option spec to the one accepted by
 # Getopt::Long::GetOptions
 sub _get_option_spec {
@@ -642,29 +628,29 @@ sub _get_option_spec {
     my @flags = @{ $spec->{flags} };
     $_ =~ s/^-+// for @flags;
     my $name = join('|', @flags);
-    my $type = '';
+    my $type = 's';
     my $desttype = $spec->{type} == TYPE_PAIR() ? '%' : '@';
 
     my $optional_flag = '='; # not optional
 
-    if ($spec->{type} == TYPE_INTEGER) {
-        $type = 'o';
-    } elsif ($spec->{type} == TYPE_STRING) {
-        $type = 's';
-    } elsif ($spec->{type} == TYPE_FLOAT) {
-        $type = 'f';
+    if ($spec->{type} == TYPE_SCALAR) {
+        # pass
+    } elsif ($spec->{type} == TYPE_ARRAY) {
+        # pass
     } elsif ($spec->{type} == TYPE_PAIR) {
-        $type = 's';
+        # pass
     } elsif ($spec->{type} == TYPE_UNDEF) {
-        $type = 's';
         $optional_flag = ':';
     } elsif ($spec->{type} == TYPE_BOOL) {
         $type = '';
         $optional_flag = '';
         $desttype = '';
+    } elsif ($spec->{type} == TYPE_COUNT) {
+        # pass
     } else {
         # pass
         # should never be here
+        croak 'Unknown type:' . ($spec->{type} || 'undef');
     }
 
     my $repeat = '';
@@ -718,30 +704,31 @@ version 0.01
  # You can continue to add arguments and parse them again
  # $ap->namespace is accumulatively populated
  
- # Parse an option and split the value into an array of values
- # action => 'append' is required for multiple value options
- $ap->add_argument('--emails', action => 'append', split => ',');
+ # Parse an Array type option and split the value into an array of values
+ $ap->add_argument('--emails', type => 'Array', split => ',');
  $ns = $ap->parse_args(split(' ', '--emails a@perl.org,b@perl.org,c@perl.org'));
- 
+ # Because this is an array option, this allows you to specify the
+ # option multiple times
+ $ns = $ap->parse_args(split(' ', '--emails a@perl.org,b@perl.org --emails c@perl.org'));
  say join('|', $ns->emails); # a@perl.org|b@perl.org|c@perl.org
- 
+
  # Parse an option as key,value pairs
  # action => 'append' is also required for multiple value hash options
- 
+
  $ap->add_argument('--param', type => 'Pair', action => 'append', split => ',');
  $ns = $ap->parse_args(split(' ', '--param a=1,b=2,c=3'));
- 
+
  say $ns->param->{a}; # 1
  say $ns->param->{b}; # 2
  say $ns->param->{c}; # 3
- 
+
  # You can use choice to restrict values
  $ap->add_arguemnt('--env', choices => [ 'dev', 'prod' ]);
- 
+
  # or use case-insensitive choices
  # Override the previous option
  $ap->add_arguemnt('--env', choices_i => [ 'dev', 'prod' ]);
- 
+
  # or use a coderef
  # Override the previous option
  $ap->add_argument(
@@ -753,11 +740,31 @@ version 0.01
 
 =head1 DESCRIPTIOIN
 
+The behaviour of argument parsing is mainly orgainized on argument types. There are the following types defined:
+
+=back
+
 =head2 USAGE
 
 =head2 METHODS
 
 =head3 Constructor
+
+=head3 add_argument()
+
+
+    name or flags - Either a name or a list of option strings, e.g. foo or -f, --foo.
+    type          - The type to which the command-line argument should be converted.
+    split          - a string by which to split the argument string e.g. a,b,c
+                    will be split into [ 'a', 'b', 'c' ] if split =>
+                    ','. split ought be be used with action append
+    default       - The value produced if the argument is absent from the command line.
+    choices       - A container of the allowable values for the argument.
+    required      - Whether or not the command-line option may be omitted (optionals only).
+    help          - A brief description of what the argument does.
+    metavar       - A name for the argument in usage messages.
+    dest          - The name of the attribute to be added to the object returned by parse_args()
+
 
 =head1 SEE ALSO
 

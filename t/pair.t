@@ -13,7 +13,6 @@ $p->add_argument(
 
 $p->add_argument(
     '--pairs',
-    action => 'append',
     type   => 'Pair',
 );
 

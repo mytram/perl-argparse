@@ -28,7 +28,7 @@ $parser->add_argument(
 
 $parser->add_argument(
     '--array',
-    action   => 'append',
+    type     => 'Array',
     required => 1,
 );
 
@@ -56,8 +56,8 @@ ok($ns->command eq 'submit', 'simple position');
 
 $p->add_argument(
     'command2',
+    type => 'Array',
     nargs => 2,
-    action => 'append',
 );
 
 $ns = $p->parse_args(split(/ /, 'submit hello1 hello2'));

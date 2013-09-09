@@ -10,7 +10,7 @@ ok($p, "new argparser");
 # Miminal set up
 $p->add_argument(
     '--email', '-e',
-    action => 'append',
+    type => 'Array',
 );
 
 $line = '-e abc@perl.org -e xyz@perl.org';
@@ -33,7 +33,7 @@ $p = ArgParse::ArgumentParser->new();
 $p->add_argument('--foo');
 $p->add_argument(
     '--email', '-e',
-    action   => 'append',
+    type     => 'Array',
     default  => 'mytram2@perl.org',
     required => 1,
 );
