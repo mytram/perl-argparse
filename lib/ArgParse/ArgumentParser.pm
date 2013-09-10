@@ -69,7 +69,7 @@ has namespace => (
     isa => sub {
         return undef unless $_[0]; # allow undef
         my $class = ref $_[0] || $_[0];
-        croak 'argparse: ' .  "Must provide a Namespace" unless $class->isa('ArgParse::Namespace');
+        croak 'argparse: ' .  "Must provide a Namespace" unless $class;
     },
 );
 
@@ -551,12 +551,12 @@ sub usage {
     push @usage, "\n";
 
     # TODO
-    if (exists $self->{-position_specs}) {
+    if ( values %{$self->{-position_specs}}) {
         push @usage, 'positional arguments:';
         push @usage, @{ $self->_format_usage_by_spec( $self->{-position_specs} ) };
     }
 
-    if ( exists $self->{-option_specs} ) {
+    if ( values %{$self->{-option_specs}} ) {
         push @usage, 'optional arguments:';
         push @usage, @{ $self->_format_usage_by_spec( $self->{-option_specs} ) };
     }
@@ -574,11 +574,13 @@ sub _format_usage_by_spec {
     my $self = shift;
     my $specs = shift;
 
+    return unless $specs;
+
     my @usage;
     my $max = 10;
     my @item_help;
 
-    for my $spec (@$specs) {
+    for my $spec (values %$specs) {
         my $item = sprintf("%s %s", join(', ',  @{$spec->{flags}}), $spec->{metavar});
         my $len = length($item);
         $max = $len if $len > $max;
