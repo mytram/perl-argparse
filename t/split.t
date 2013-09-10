@@ -8,12 +8,22 @@ $p = ArgParse::ArgumentParser->new();
 ok($p, "new argparser");
 
 $p->add_argument(
-    '--e',
+    '--single',
     type => 'Array',
     split => ',',
 );
 
-$n = $p->parse_args(split(' ', '--e a,b,c'));
+$p->add_argument(
+    '--e',
+    type  => 'Array',
+    split => ',',
+);
+
+$n = $p->parse_args(split(' ', '--single 1,2,3 --single 4,5,6 --e a,b,c'));
+
+@s = $n->single;
+ok (scalar @s eq 6, "split count");
+ok (join(',', @s) eq '1,2,3,4,5,6', "split value: single");
 
 @e = $n->e;
 

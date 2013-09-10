@@ -6,8 +6,8 @@ package ArgParse::ArgumentParser;
 }
 
 use Moo;
-use Carp;
 
+use Carp;
 use Getopt::Long qw(GetOptionsFromArray);
 use Text::Wrap;
 
@@ -38,8 +38,9 @@ my %Action2ClassMap = (
 	'_store'       => 'ArgParse::ActionStore',
     '_append'      => 'ArgParse::ActionAppend',
     '_count'       => 'ArgParse::ActionCount',
-    '_help'        => 'ArgParse::ActionHelp',
-    '_version'     => 'ArgParse::ActionVersion',
+    # Not supported
+    # '_help'        => 'ArgParse::ActionHelp',
+    # '_version'     => 'ArgParse::ActionVersion',
 );
 
 my %Type2ConstMap = (
@@ -68,7 +69,7 @@ has namespace => (
     isa => sub {
         return undef unless $_[0]; # allow undef
         my $class = ref $_[0] || $_[0];
-        croak "Must provide a Namespace" unless $class->isa('ArgParse::Namespace');
+        croak 'argparse: ' .  "Must provide a Namespace" unless $class->isa('ArgParse::Namespace');
     },
 );
 
@@ -86,8 +87,8 @@ has parent => (
 
 # parser_configs - Read/write
 
-#The configurations that will be passed to Getopt::Long::Configure(
-#$self->parser_configs ) when parse_args is invoked.
+# The configurations that will be passed to Getopt::Long::Configure(
+# $self->parser_configs ) when parse_args is invoked.
 
 has parser_configs => ( is => 'rw', required => 1, default => sub { [] }, );
 
@@ -124,24 +125,6 @@ sub add_arguments {
     $self->add_argument(@$_) for @_;
 }
 
-#
-# add_argument()
-#
-#    name or flags - Either a name or a list of option strings, e.g. foo or -f, --foo.
-#    action        - The basic type of action to be taken when this argument
-#                    is encountered at the command line.
-#    split          - a string by which to split the argument string e.g. a,b,c
-#                    will be split into [ 'a', 'b', 'c' ] if split =>
-#                    ','. split ought be be used with action append
-#    default       - The value produced if the argument is absent from the command line.
-#    type          - The type to which the command-line argument should be converted.
-#    choices       - A container of the allowable values for the argument.
-#    required      - Whether or not the command-line option may be omitted (optionals only).
-#    help          - A brief description of what the argument does.
-#    metavar       - A name for the argument in usage messages.
-#    dest          - The name of the attribute to be added to the object returned by parse_args().
-#
-
 sub add_argument {
     my $self = shift;
 
@@ -151,11 +134,11 @@ sub add_argument {
 
     my ($name, $flags, $rest) = $self->_parse_for_name_and_flags([ @_ ]);
 
-    croak "Incorrect arguments" if scalar(@$rest) % 2;
+    croak 'argparse: ' .  "Incorrect arguments" if scalar(@$rest) % 2;
 
     my $args = { @$rest };
 
-    croak "Must provide at least one non-empty argument name" unless $name;
+    croak 'argparse: ' .  "Must provide at least one non-empty argument name" unless $name;
 
     my @flags = @{ $flags || [] };
 
@@ -165,7 +148,7 @@ sub add_argument {
     my $type_name = $args->{type} || '';
     my $type = $Type2ConstMap{$type_name} if exists $Type2ConstMap{$type_name};
 
-    croak "Unknown type: $type_name" unless defined $type;
+    croak 'argparse: ' .  "Unknown type: $type_name" unless defined $type;
 
     if ($type == TYPE_BOOL) {
         if (!defined $args->{default}) {
@@ -195,7 +178,7 @@ sub add_argument {
 
         eval "require $action";
 
-        croak "Cannot find the module for action $action" if $@;
+        croak 'argparse: ' .  "Cannot find the module for action $action" if $@;
     };
 
     ################
@@ -203,7 +186,11 @@ sub add_argument {
     ################
     my $split = $args->{split};
     if (defined $split && !$split && $split =~ /^ +$/) {
-        croak 'cannot split arguments on whitespaces';
+        croak 'argparse: ' .  'cannot split arguments on whitespaces';
+    }
+
+    if (defined $split && $type != TYPE_ARRAY && $type != TYPE_PAIR) {
+        croak 'argparse: ' .  'Only allow split to be used with either Array or Pair type';
     }
 
     ################
@@ -215,7 +202,7 @@ sub add_argument {
         if (ref($val) eq 'ARRAY') {
             $default = $val;
         } elsif (ref($val) eq 'HASH') {
-            croak 'Cannot use HASH default for non-hash type options'
+            croak 'argparse: ' .  'Cannot use HASH default for non-hash type options'
                 if $type != TYPE_PAIR;
             $default = $val;
         } else {
@@ -233,7 +220,7 @@ sub add_argument {
         && ref($choices) ne 'CODE'
         && ref($choices) ne 'ARRAY' )
     {
-        croak "Must provide choices in an arrayref or a coderef";
+        croak 'argparse: ' .  "Must provide choices in an arrayref or a coderef";
     }
 
     ################
@@ -253,7 +240,7 @@ sub add_argument {
 
     $metavar = ''
         if $type == TYPE_BOOL
-            || $action_name eq 'count';
+            || $action_name eq '_count';
 
     ################
     # dest
@@ -265,7 +252,7 @@ sub add_argument {
         while (my ($d, $s) = each %{$self->{-option_specs}}) {
             if ($dest ne $d) {
                 for my $f (@flags) {
-                   croak "$f already used for a different option ($d)"
+                   croak 'argparse: ' .  "$f already used for a different option ($d)"
                         if grep { $f eq $_ } @{$s->{flags}};
                 }
             }
@@ -323,10 +310,10 @@ sub _parse_for_name_and_flags {
 }
 
 # parse_args([@_])
-
+#
 # Parse @ARGV if called without passing arguments. It returns an
 # instance of ArgParse::Namespace upon success
-
+#
 # Interface
 
 sub parse_args {
@@ -383,7 +370,7 @@ sub _parse_optional_args {
         my $result = GetOptionsFromArray( $self->{-argv}, %$options );
 
         if ($warn || !$result) {
-            croak "Getoptions error: $warn";
+            croak 'argparse: ' .  "Getoptions error: $warn";
         }
     }
 
@@ -391,7 +378,7 @@ sub _parse_optional_args {
 
     my $error = $self->_post_parse_processing( \@option_specs, $options, $dest2spec );
 
-    croak $error if $error;
+    croak 'argparse: ' .  $error if $error;
 
     $self->_apply_action(\@option_specs, $options, $dest2spec);
 }
@@ -415,7 +402,7 @@ sub _parse_positional_args {
         next unless @{$self->{-argv}};
 
         if ($spec->{type} == TYPE_BOOL) {
-            croak 'Bool not allowed for positional arguments';
+            croak 'argparse: ' .  'Bool not allowed for positional arguments';
         }
 
         my $number = 1;
@@ -425,11 +412,11 @@ sub _parse_positional_args {
                 $number = 1;
             } elsif ($nargs eq '+') {
                 $number = 1;
-                croak "too few arguments: narg='+'" unless @{$self->{-argv}};
+                croak 'argparse: ' .  "too few arguments: narg='+'" unless @{$self->{-argv}};
             } elsif ($nargs eq '*') { # remainder
                 $number = scalar @{$self->{-argv}};
             } elsif ($nargs !~ /^\d*$/) {
-                croak 'invalid nargs';
+                croak 'argparse: ' .  'invalid nargs';
             } else {
                 $number = $nargs;
             }
@@ -441,7 +428,7 @@ sub _parse_positional_args {
     }
 
     my $error = $self->_post_parse_processing(\@specs, $options, $dest2spec);
-    croak $error if $error;
+    croak 'argparse: ' .  $error if $error;
 
     $self->_apply_action(\@specs, $options, $dest2spec);
 }
@@ -509,9 +496,6 @@ sub _post_parse_processing {
                 }
             }
         }
-
-        # TODO
-        # type convert
     }
 
     return '';
@@ -542,6 +526,7 @@ sub _apply_action {
     }
 }
 
+# TODO: show required, default
 sub usage {
     my $self = shift;
 
@@ -647,10 +632,13 @@ sub _get_option_spec {
         $desttype = '';
     } elsif ($spec->{type} == TYPE_COUNT) {
         # pass
+        $type = '';
+        $optional_flag = '';
+        $desttype = '+';
     } else {
         # pass
         # should never be here
-        croak 'Unknown type:' . ($spec->{type} || 'undef');
+        croak 'argparse: ' . 'Unknown type:' . ($spec->{type} || 'undef');
     }
 
     my $repeat = '';
@@ -675,35 +663,35 @@ ArgParse::ArgumentParser - A Perl's Argument Parser
 version 0.01
 
 =head1 SYNOPSIS
- 
+
  use ArgParse::ArgumentParser;
- 
+
  $ap = ArgParse::ArgumentParser->new(
  	prog        => 'MyProgramName',
  	description => 'This is a program',
  );
- 
+
  # Parse an option: '--foo value' or '-f value'
  $ap->add_argument('--foo', '-f', required => 1);
- 
+
  # Parse a boolean: '--bool' or '-b' using a different name from
  # the option
  $ap->add_argument('--bool', '-b', type => 'Bool', dest => 'boo');
- 
+
  # Parse a positonal option
  $ap->add_arguement('command', required => 1);
- 
+
  # $ns is also accessible via $ap->namespace
  my $ns = $ap->parse_args(split(' ', 'test -f 1 -b');
- 
+
  say $ns->command; # 'test'
  say $ns->foo;     # 1
  say $ns->boo      # 1
  say $ns->no_boo   # 0 - 'no_' is added for boolean options
- 
+
  # You can continue to add arguments and parse them again
  # $ap->namespace is accumulatively populated
- 
+
  # Parse an Array type option and split the value into an array of values
  $ap->add_argument('--emails', type => 'Array', split => ',');
  $ns = $ap->parse_args(split(' ', '--emails a@perl.org,b@perl.org,c@perl.org'));
@@ -713,9 +701,7 @@ version 0.01
  say join('|', $ns->emails); # a@perl.org|b@perl.org|c@perl.org
 
  # Parse an option as key,value pairs
- # action => 'append' is also required for multiple value hash options
-
- $ap->add_argument('--param', type => 'Pair', action => 'append', split => ',');
+ $ap->add_argument('--param', type => 'Pair', split => ',');
  $ns = $ap->parse_args(split(' ', '--param a=1,b=2,c=3'));
 
  say $ns->param->{a}; # 1
@@ -740,41 +726,212 @@ version 0.01
 
 =head1 DESCRIPTIOIN
 
-The behaviour of argument parsing is mainly orgainized on argument types. There are the following types defined:
+ArgParse::ArgumentParser and related classes together aim to provide
+user-friendly interfaces for writing command-line interfaces. A user
+should be able to use it without looking up the document most of the
+time. It allows applications to define argument specifications and it
+will parse them out of @AGRV by default or a command line if
+provided. It implements both optional arguments, using Getopt::Long
+for parsing, and positional arguments. The class also generates help
+and usage messages.
 
-=back
+The parser has a namespace property, which is an object of
+ArgParser::Namespace. The parsed argument values are stored in this
+namespace property. Moreover, the values are stored accumulatively
+when parse_args() is called multiple times.
 
-=head2 USAGE
+Though inspired by Python's argparse and names and ideas are borrowed
+from it, it doesn't work exactly the same as argparse .
+
+ArgParse::ArgumentParser is a Moo class.
 
 =head2 METHODS
 
 =head3 Constructor
 
-=head3 add_argument()
+ArgParse::ArgumentParser->new( ... )
 
+This will create a new parser. It accepts the following parameters.
 
-    name or flags - Either a name or a list of option strings, e.g. foo or -f, --foo.
-    type          - The type to which the command-line argument should be converted.
-    split          - a string by which to split the argument string e.g. a,b,c
-                    will be split into [ 'a', 'b', 'c' ] if split =>
-                    ','. split ought be be used with action append
-    default       - The value produced if the argument is absent from the command line.
-    choices       - A container of the allowable values for the argument.
-    required      - Whether or not the command-line option may be omitted (optionals only).
-    help          - A brief description of what the argument does.
-    metavar       - A name for the argument in usage messages.
-    dest          - The name of the attribute to be added to the object returned by parse_args()
+=over 8
 
+=item * prog
+
+The program's name. Default $0.
+
+=item * description
+
+A description of the program.
+
+=item * namespace
+
+An object of ArgParse::Namespace. An empty namespace is created if
+not provided. The parsed values are stored in it, and they can be
+refered to by their argument names as the namespace's properties,
+e.g. $parser->namespace->boo. See also ArgParse::Namespace
+
+=item * parser_configs
+
+The Getopt::Long configurations. See also Getopt::Long
+
+=item * parent
+
+Another parser, whose argument specifications the new parse will
+inherit.
+
+=back
+
+=head3 add_argument( ... )
+
+This object method defines the specfication of an argument. It accepts
+the following parameters.
+
+=over 8
+
+=item * name or flags
+
+Either a name or a list of option strings, e.g. foo or -f, --foo.
+
+If dest is not specified, the name or the first option without leading
+dashes will be used as the name for retrieving values. If a name is
+given, this argument is a positional argument. Otherwise, it's an
+option argument.
+
+Hyphens can be used in names and flags, but they will be replaced with
+underscores '_' when used as option names. For example:
+
+    $parser->add_argument('--dry-run', type => 'Bool');
+    # command line: prog --dry-run
+    $parser->namespace->dry_run; # The option's name is dry_run
+
+A name or option strings are following by named paramters.
+
+=item * dest
+
+The name of the attribute to be added to the namespace populated by
+parse_args().
+
+=item * type => $type
+
+Specify the type of the argument. It can be one of the following values:
+
+=over 8
+
+=item * Scalar
+
+The option takes a scalar value.
+
+=item * Array
+
+The option takes a list of values. The option can appear multiple
+times in the command line. Each value is appended to the list. It's
+stored in an arrayref in the namespace.
+
+=item * Pair
+
+The option takes a list of key-value pairs separated by the equal sign
+'='. It's stored in a hashref in the namespace.
+
+=item * Bool
+
+The option does not take an argument. It's set to true if the option
+is present or false otherwise. A 'no_bool' option is also available,
+which is the negation of bool().
+
+For example:
+
+    $parser->add_argument('--dry-run', type => 'Bool');
+
+    $ns = $parser->parse_args(split(' ', '--dry-run'));
+
+    print $ns->dry_run; # true
+    print $ns->no_dry_run; # false
+
+=item * Count
+
+The option does not take an argument and its value will be incremented
+by 1 every time it appears on the command line.
+
+=back
+
+=item * split
+
+split should work with types 'Array' and 'Pair' only.
+
+split specifies a string by which to split the argument string e.g. if
+split => ',', a,b,c will be split into [ 'a', 'b', 'c' ].When split
+works with type 'Pair', the parser will split the argument string and
+then parse each of them as pairs.
+
+=item * choices
+
+Specify A list of the allowable values for the argument or a
+subroutine that validates input values.
+
+=item * default
+
+The value produced if the argument is absent from the command line.
+
+=item * required
+
+Whether or not the command-line option may be omitted (optionals only).
+
+=item * help
+
+A brief description of what the argument does.
+
+=item * metavar
+
+A name for the argument in usage messages.
+
+=item * nargs - Positional option only
+
+=over 8
+
+=item * n (1 if not specified)
+
+=item * ?
+
+=item * *
+
+=back
+
+=back
+
+=head3 parse_args( ... )
+
+This object method accepts a list of arguments or @ARGV if
+unspecified, parses them for values, and stores the values in the
+namespace object.
+
+It displays a generated usage message if both @ARGV and argument list
+are empty.
+
+=head4 The namespace object is accumulatively poplulated
+
+If parse_args() is called multiple times to parse a number of command
+lines, the same namespace object is accumulatively populated.  For
+Scalar and Bool options, this means the previous value will be
+overwrittend. For Pair and Array options, values will be appended. And
+for a Count option, it will add on top of the previous value.
+
+In face, the program can choose to pass a already populated namespace
+when creating a parser object. This is to allow the program to pre-load
+values to a namespace from conf files before parsing the command line.
 
 =head1 SEE ALSO
+
+Getopt::Long
 
 Python's argparse
 
 =head1 AUTHOR
 
-Mytram <mytram2@gmail.com>
+Mytram <mytram2@gmail.com> (original author)
 
 =head1 COPYRIGHT AND LICENSE
+
+This software is Copyright (c) 2013 by Mytram.
 
 This is free software.
 

@@ -13,7 +13,9 @@ sub apply {
 
     $values ||= [];
 
-    $namespace->set_attr( $spec->{dest}, scalar(@$values) );
+    my $v = $namespace->get_attr($spec->{dest}) || 0;
+
+    $namespace->set_attr( $spec->{dest}, $v + scalar(@$values) );
 }
 
 1;
