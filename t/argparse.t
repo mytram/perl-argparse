@@ -32,9 +32,13 @@ $parser->add_argument(
     required => 1,
 );
 
-throws_ok( sub {
-               $ns = $parser->parse_args(split(/ /, '-foo 10 20 30 --array a --array b --array c'));
-}, qr/required/, 'required option: bool');
+throws_ok(
+    sub {
+        $ns = $parser->parse_args(split(/ /, '-foo 10 20 30 --array a --array b --array c'));
+    },
+    qr/required/,
+    'required option: bool'
+);
 
 $ns = $parser->parse_args(split(/ /, '-foo 10 20 30 -b --array a --array b --array c'));
 
@@ -63,8 +67,6 @@ $p->add_argument(
 $ns = $p->parse_args(split(/ /, 'submit hello1 hello2'));
 $cmd2 = $ns->command2;
 
-#use Data::Dumper;
-#print Dumper($cmd2);
 ok(scalar(@$cmd2) == 2, 'nargs 2');
 
 done_testing;

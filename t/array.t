@@ -60,4 +60,39 @@ $emails = $ns->email;
 ok(scalar(@$emails) == 1, 'append - ref - size');
 ok($emails->[0] eq 'abc@perl.org', 'append - ref - element');
 
+
+# positional options
+$p = ArgParse::ArgumentParser->new();
+ok($p, "new argparser");
+
+$p->add_argument('boo', nargs => 3, type => 'Array');
+
+throws_ok(
+    sub { $n = $p->parse_args(split(' ', '1 2')) },
+    qr/expected:3,actual:2/,
+    'not enough arguments',
+);
+
+$p->add_argument('boo2');
+
+lives_ok(
+    sub { $n = $p->parse_args(split(' ', '1 2 3')) },
+);
+
+ok(!defined($n->boo2), 'boo2 not defined');
+
+$p->add_argument('boo3', required => 1);
+
+throws_ok(
+    sub { $n = $p->parse_args(split(' ', '1 2 3 4')) },
+    qr/boo3 is required/,
+    'required option boo3 not value',
+);
+
+lives_ok(
+    sub { $n = $p->parse_args(split(' ', '1 2 3 4 5')) },
+);
+
+ok($n->boo3 eq '5', 'boo3 is 5');
+
 done_testing;

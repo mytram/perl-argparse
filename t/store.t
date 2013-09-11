@@ -27,4 +27,13 @@ ok (!$ns->q, 'q - false');
 ok ($ns->no_vv, 'no_vv - true');
 ok ($ns->no_q, 'no_q - true');
 
+# positional args
+$p = ArgParse::ArgumentParser->new();
+
+$p->add_argument('boo');
+
+$n = $p->parse_args(split(' ', 100, 200));
+
+ok($n->boo == 100, 'boo is 100');
+
 done_testing;
