@@ -14,13 +14,27 @@ $parser->add_argument('--boo', type => 'Bool');
 
 $parser->add_argument('--nboo', type => 'Bool');
 
-$parser->add_argument('--verbose', type => 'Count');
+throws_ok (
+    sub { $parser->add_argument('--verbose', type => 'Count'); },
+    qr/not allow/,
+    'not allow to override',
+);
 
+$parser->add_argument('--verbose', type => 'Count', reset => 1);
 $parser->add_argument('--email', required => 1);
 
 $parser->add_argument('--email2', '--e2', required => 1);
 
-$parser->add_argument('boo', required => 1);
+throws_ok(
+  sub {  $parser->add_argument('boo', required => 1); },
+  qr/used by an optional/,
+  'dest=boo is used',
+);
+
+$parser->add_argument('boo', required => 1, dest => 'boo_post');
+
+$parser->add_argument('boo2', type => 'Pair', required => 1, default => { a => 1, 3 => 90 });
+
 
 $parser->usage();
 

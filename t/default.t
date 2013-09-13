@@ -31,7 +31,7 @@ throws_ok(
 );
 
 lives_ok(
-    sub { $p->add_argument('--optional-option', type => 'Pair', default => { a => 1 }); },
+    sub { $p->add_argument('--optional-option', type => 'Pair', default => { a => 1 }, reset => 1); },
 );
 
 $p->namespace(undef);
