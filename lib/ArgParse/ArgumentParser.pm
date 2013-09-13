@@ -214,8 +214,6 @@ sub add_argument {
                 croak 'argparse: ' . 'multiple default values for scalar type: $name';
             }
         }
-    } else {
-        $default = [];
     }
 
     ################
@@ -268,6 +266,14 @@ sub add_argument {
                 }
             }
         }
+
+        if (exists $self->{-position_specs}{$dest}) {
+            croak "argparse: dest=$dest is used by a positional argument";
+        }
+    } else {
+        if (exists $self->{-option_specs}{$dest}) {
+            croak "argparse: dest=$dest is used by an optional argument";
+        }
     }
 
     ################
@@ -279,9 +285,6 @@ sub add_argument {
     if (defined $nargs ) {
         croak 'argparse: ' . 'nargs only allowed for positional options' if @flags;
     }
-
-
-    croak sprintf('argparse: unknown spec parameters: %s', join(',', keys %$args)) if keys %$args;
 
     # never modify existing ones so that the parent's structure will
     # not be modified
@@ -302,12 +305,32 @@ sub add_argument {
         position => $self->{-option_position}++, # sort order
     };
 
-    # override
+    my $specs;
     if (@flags) {
-        $self->{-option_specs}{$spec->{dest}} = $spec;
+        $specs = $self->{-option_specs};
     } else {
-        $self->{-position_specs}{$spec->{dest}} = $spec;
+        $specs = $self->{-position_specs}{$spec->{dest}} = $spec;
     }
+
+    # reset
+    if (delete $args->{reset}) {
+        $self->namespace->set_attr($spec->{type}, undef) if $self->namespace;
+        delete $specs->{$spec->{dest}};
+    }
+
+    croak sprintf('argparse: unknown spec parameters: %s', join(',', keys %$args)) if keys %$args;
+
+    # type check
+    if (exists $specs->{$spec->{dest}}{type}
+            && $specs->{$spec->{dest}}{type} != $spec->{type}) {
+        croak sprintf(
+            'argparse: not allow to override %s with different type',
+            $spec->{dest}
+        );
+    }
+
+    # override
+    $specs->{$spec->{dest}} = $spec;
 
     return $self;
 }
@@ -482,6 +505,7 @@ sub _parse_positional_args {
     $self->_apply_action($specs, $options, $dest2spec);
 }
 
+#
 sub _post_parse_processing {
     my $self         = shift;
     my ($option_specs, $options, $dest2spec) = @_;
@@ -640,10 +664,38 @@ sub _format_usage_by_spec {
     my @item_help;
 
     for my $spec (values %$specs) {
-        my $item = sprintf("%s %s", join(', ',  @{$spec->{flags}}), $spec->{metavar});
+        my $item = sprintf(
+            "%s %s",
+            join(', ',  @{$spec->{flags}}),
+            $spec->{metavar} .  ($spec->{required} ? '' : '?'),
+        );
         my $len = length($item);
         $max = $len if $len > $max;
-        push @item_help, [ $item, $spec->{help} ];
+
+        # flatterning default
+        my $default = '';
+        my $values = [];
+
+        if (defined $spec->{default}) {
+            if (ref $spec->{default} eq 'HASH') {
+                while (my ($k, $v) = each %{$spec->{default}}) {
+                    push @$values, "$k=$v";
+                }
+            } elsif (ref $spec->{default} eq "ARRAY") {
+                $values = $spec->{default};
+            } else {
+                $values = [ $spec->{default} ];
+            }
+        }
+
+        if (@$values) {
+            $default = 'Default: ' . join(',', @$values);
+        }
+
+        push @item_help, [
+            $item,
+            join("\n", ($spec->{help} || 'This is option ' . $spec->{dest}), $default),
+        ];
     }
 
     $max *= -1;
