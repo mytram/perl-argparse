@@ -4,8 +4,6 @@ use strict;
 use warnings;
 use Carp;
 
-sub nargs { 0 }
-
 sub apply {
     my $self = shift;
 

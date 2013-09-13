@@ -18,12 +18,14 @@ sub apply {
         my $default = $spec->{default} || [ 0 ];
 
         if (@$values) {
+             # Negate the default if the arg appears on the command
+             # line
             $namespace->set_attr($spec->{dest}, !$default->[0]);
         } else {
             $namespace->set_attr($spec->{dest}, $default->[0]);
         }
 
-        # make no_quiet available
+        # make no_arg available
         $namespace->set_attr( 'no_' . $spec->{dest}, !$namespace->get_attr($spec->{dest}) );
 
         return;

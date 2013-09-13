@@ -42,7 +42,7 @@ sub set_block_attr {
     croak "Block $name($id) already exists"
         if exists $self->{blocks}{$name}{$id};
 
-    my $config = MSC::Config->new();
+    my $config = ArgParse::Namespace->new();
 
     while (my ($key, $value) = each %$block) {
         $config->set_attr($key => $value);

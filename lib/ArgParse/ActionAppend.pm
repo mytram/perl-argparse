@@ -3,6 +3,8 @@ package ArgParse::ActionAppend;
 use strict;
 use Carp;
 
+use ArgParse::ArgumentParser;
+
 sub apply {
     my $self = shift;
 
@@ -11,10 +13,14 @@ sub apply {
     $values ||= [];
 
     if ($spec->{type} == ArgParse::ArgumentParser::TYPE_BOOL) {
-        croak 'appending to type Bool not allowed';
+        croak 'argparse: appending to type Bool not allowed';
     }
 
     my $v = $namespace->get_attr( $spec->{dest} );
+
+    if (defined($v) && !ref($v)) {
+        croak 'argparse: argument type conflict: expected Pair or Array';
+    }
 
     if ($spec->{type} == ArgParse::ArgumentParser::TYPE_PAIR) {
         $v = {} unless defined $v;

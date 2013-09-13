@@ -98,6 +98,9 @@ has _option_position => ( is => 'rw', required => 1, default => sub { 0 } );
 sub BUILD {
     my $self = shift;
 
+    $self->{-option_specs} = {};
+    $self->{-position_specs} = {};
+
     $self->add_argument(
         '--help', '-h',
         type => 'Bool',
@@ -145,17 +148,14 @@ sub add_argument {
     ################
     # type
     ################
-    my $type_name = $args->{type} || '';
+    my $type_name = delete $args->{type} || '';
     my $type = $Type2ConstMap{$type_name} if exists $Type2ConstMap{$type_name};
 
     croak 'argparse: ' .  "Unknown type: $type_name" unless defined $type;
 
-    if ($type == TYPE_BOOL) {
-        if (!defined $args->{default}) {
-            $args->{default} = 0; # False if unspecified, or True
-        }
-    } elsif ($type == TYPE_COUNT) {
+    if ($type == TYPE_COUNT) {
         $args->{action} = '_count' unless defined $args->{action};
+        $args->{default} = 0 unless defined $args->{default};
     } elsif ($type == TYPE_ARRAY || $type == TYPE_PAIR) {
         $args->{action} = '_append' unless defined $args->{action};
     } else {
@@ -165,7 +165,7 @@ sub add_argument {
     ################
     # action
     ################
-    my $action_name = $args->{action} || '_store';
+    my $action_name = delete $args->{action} || '_store';
 
     my $action = $Action2ClassMap{$action_name}
         if exists $Action2ClassMap{$action_name};
@@ -184,9 +184,9 @@ sub add_argument {
     ################
     # split
     ################
-    my $split = $args->{split};
+    my $split = delete $args->{split};
     if (defined $split && !$split && $split =~ /^ +$/) {
-        croak 'argparse: ' .  'cannot split arguments on whitespaces';
+        croak 'argparse: ' .  'cannot split by whitespaces';
     }
 
     if (defined $split && $type != TYPE_ARRAY && $type != TYPE_PAIR) {
@@ -198,15 +198,21 @@ sub add_argument {
     ################
     my $default;
     if (exists $args->{default}) {
-        my $val = $args->{default};
+        my $val = delete $args->{default};
         if (ref($val) eq 'ARRAY') {
             $default = $val;
         } elsif (ref($val) eq 'HASH') {
-            croak 'argparse: ' .  'Cannot use HASH default for non-hash type options'
+            croak 'argparse: ' .  'HASH default only for Pair type options'
                 if $type != TYPE_PAIR;
             $default = $val;
         } else {
             $default = [ $val ];
+        }
+
+        if ($type != TYPE_PAIR) {
+            if ($type != TYPE_ARRAY && scalar(@$default) > 1) {
+                croak 'argparse: ' . 'multiple default values for scalar type: $name';
+            }
         }
     } else {
         $default = [];
@@ -215,7 +221,7 @@ sub add_argument {
     ################
     # choices
     ################
-    my $choices = $args->{choices} || undef;
+    my $choices = delete $args->{choices} || undef;
     if (   $choices
         && ref($choices) ne 'CODE'
         && ref($choices) ne 'ARRAY' )
@@ -226,17 +232,22 @@ sub add_argument {
     ################
     # required
     ################
-    my $required = $args->{required} || '';
+    my $required = delete $args->{required} || '';
 
     ################
     # help
     ################
-    my $help = $args->{help} || '';
+    my $help = delete $args->{help} || '';
+
+    ################
+    # group - grouping options
+    ################
+    my $group = delete $args->{group} || '-all';
 
     ################
     # metavar
     ################
-    my $metavar = $args->{metavar} || uc($name);
+    my $metavar = delete $args->{metavar} || uc($name);
 
     $metavar = ''
         if $type == TYPE_BOOL
@@ -245,7 +256,7 @@ sub add_argument {
     ################
     # dest
     ################
-    my $dest = $args->{dest} || $name;
+    my $dest = delete $args->{dest} || $name;
     $dest =~ s/-/_/g; # option-name becomes option_name
 
     if (@flags) {
@@ -259,21 +270,35 @@ sub add_argument {
         }
     }
 
+    ################
+    # nargs - positional only
+    ################
+
+    my $nargs = delete $args->{nargs};
+
+    if (defined $nargs ) {
+        croak 'argparse: ' . 'nargs only allowed for positional options' if @flags;
+    }
+
+
+    croak sprintf('argparse: unknown spec parameters: %s', join(',', keys %$args)) if keys %$args;
+
     # never modify existing ones so that the parent's structure will
     # not be modified
     my $spec = {
         name     => $name,
         flags    => \@flags,
         action   => $action,
-        nargs	 => $args->{nargs},
-        split    => $args->{split},
-        required => $args->{required} || '',
+        nargs	 => $nargs,
+        split    => $split,
+        required => $required || '',
         type     => $type,
         default  => $default,
         choices  => $choices,
         dest     => $dest,
         metavar  => $metavar,
         help     => $help,
+        group    => $group,
         position => $self->{-option_position}++, # sort order
     };
 
@@ -323,45 +348,59 @@ sub parse_args {
 
     my @argv = scalar(@_) ? @_ : @ARGV;
 
-    unless (@argv) {
-        my $usage = $self->usage();
-        exit(0);
-    }
-
-    my $namespace = $self->namespace || ArgParse::Namespace->new;
-    $self->namespace($namespace);
-
-    $self->{-argv} = \@argv;
-
-    $self->_parse_optional_args();
-
-    $self->_parse_positional_args();
-
-    if ($namespace->get_attr('help')) {
-        my $usage = $self->usage();
-        exit(0);
-    }
-
-    return $namespace;
-}
-
-sub _parse_optional_args {
-    my $self = shift;
-
-    Getopt::Long::Configure( @{ $self->parser_configs } );
-
-    my $options   = {};
-    my $dest2spec = {};
-
     my @option_specs = sort {
         $a->{position} <=> $b->{position}
     } values %{$self->{-option_specs}};
 
-    for my $spec ( @option_specs ) {
-        my @values =  ();
+    my @position_specs = sort {
+        $a->{position} <=> $b->{position}
+    } values %{$self->{-position_specs}};
+
+    unless (@argv) {
+        for (@option_specs, @position_specs) {
+            # only show usage if no args will be populated due to an
+            # empty command line
+            if ( $_->{required}
+                     && !defined($_->{default})
+                     && !defined($self->namespace->get_attr($_->{dest}))
+            )
+            {
+                $self->usage();
+                exit(0);
+            }
+            # otherwise continue to initialise options
+        }
+    }
+
+    $self->namespace(ArgParse::Namespace->new) unless $self->namespace;
+
+    $self->{-argv} = \@argv;
+
+    $self->_parse_optional_args(\@option_specs) if @option_specs;
+
+    $self->_parse_positional_args(\@position_specs) if @position_specs;
+
+    if ($self->namespace->get_attr('help')) {
+        my $usage = $self->usage();
+        exit(0);
+    }
+
+    return $self->namespace;
+}
+
+sub _parse_optional_args {
+    my $self = shift;
+    my $specs = shift;
+    my $options   = {};
+    my $dest2spec = {};
+
+    for my $spec ( @$specs ) {
+        my @values;
         $dest2spec->{$spec->{dest}} = $self->_get_option_spec($spec);
         $options->{ $dest2spec->{$spec->{dest}} } = \@values;
     }
+
+    Getopt::Long::Configure( @{ $self->parser_configs } );
 
     {
         my $warn;
@@ -376,61 +415,71 @@ sub _parse_optional_args {
 
     Getopt::Long::Configure('default');
 
-    my $error = $self->_post_parse_processing( \@option_specs, $options, $dest2spec );
+    my $error = $self->_post_parse_processing( $specs, $options, $dest2spec );
 
     croak 'argparse: ' .  $error if $error;
 
-    $self->_apply_action(\@option_specs, $options, $dest2spec);
+    $self->_apply_action($specs, $options, $dest2spec);
 }
 
 sub _parse_positional_args {
     my $self = shift;
+    my $specs = shift;
+
     my $options   = {};
     my $dest2spec = {};
 
-    my @specs = sort {
-        $a->{position} <=> $b->{position}
-    } values %{$self->{-position_specs}};
-
-  POSITION_SPEC:
-    for my $spec (@specs) {
+    for my $spec (@$specs) {
         $dest2spec->{$spec->{dest}} = $spec->{dest};
         my @values = ();
         # Always assigne values to an option
         $options->{$spec->{dest}} = \@values;
+    }
 
-        next unless @{$self->{-argv}};
+  POSITION_SPEC:
+    for my $spec (@$specs) {
+        my $values = $options->{$spec->{dest}};
 
         if ($spec->{type} == TYPE_BOOL) {
             croak 'argparse: ' .  'Bool not allowed for positional arguments';
         }
 
         my $number = 1;
+        my $nargs = defined $spec->{nargs} ? $spec->{nargs} : 1;
         if (defined $spec->{nargs}) {
-            my $nargs = $spec->{nargs};
             if ($nargs eq '?') {
                 $number = 1;
             } elsif ($nargs eq '+') {
-                $number = 1;
-                croak 'argparse: ' .  "too few arguments: narg='+'" unless @{$self->{-argv}};
+                croak 'argparse: ' . "too few arguments: narg='+'" unless @{$self->{-argv}};
+                $number = scalar @{$self->{-argv}};
             } elsif ($nargs eq '*') { # remainder
                 $number = scalar @{$self->{-argv}};
-            } elsif ($nargs !~ /^\d*$/) {
-                croak 'argparse: ' .  'invalid nargs';
+            } elsif ($nargs !~ /^\d+$/) {
+                croak 'argparse: ' .  'invalid nargs:' . $nargs;
             } else {
                 $number = $nargs;
             }
         }
 
-        if (scalar(@{$self->{-argv}})) {
-            push @values, splice(@{$self->{-argv}}, 0, $number);
+        push @$values, splice(@{$self->{-argv}}, 0, $number) if @{$self->{-argv}};
+
+        # If no values, let it pass for required checking
+        # If there are values, make sure there is the right number of
+        # values
+        if (scalar(@$values) && scalar(@$values) != $number) {
+            croak(
+                sprintf(
+                    'argparse: not enough arguments for %s: expected:%d,actual:%d',
+                    $spec->{dest}, $number, scalar(@$values),
+                )
+            );
         }
     }
 
-    my $error = $self->_post_parse_processing(\@specs, $options, $dest2spec);
+    my $error = $self->_post_parse_processing($specs, $options, $dest2spec);
     croak 'argparse: ' .  $error if $error;
 
-    $self->_apply_action(\@specs, $options, $dest2spec);
+    $self->_apply_action($specs, $options, $dest2spec);
 }
 
 sub _post_parse_processing {
@@ -442,15 +491,26 @@ sub _post_parse_processing {
         my $values = $options->{ $dest2spec->{$spec->{dest}} };
 
         # default
-        if ( scalar(@$values) < 1 && $spec->{default} ) {
-            push @$values, @{$spec->{default}} unless $spec->{type} == TYPE_BOOL;
+        if (!defined($self->namespace->get_attr($spec->{dest}))
+                && scalar(@$values) < 1
+                && defined($spec->{default}) )
+        {
+            if ($spec->{type} == TYPE_COUNT) {
+                $self->namespace->set_attr($spec->{dest}, @{$spec->{default}});
+            } elsif ($spec->{type} == TYPE_BOOL) {
+                $self->namespace->set_attr($spec->{dest}, @{$spec->{default}});
+            } elsif ($spec->{type} == TYPE_PAIR) {
+                $self->namespace->set_attr($spec->{dest}, $spec->{default});
+            } else {
+                push @$values, @{$spec->{default}};
+            }
         }
 
         # required
         return sprintf('%s is required', $spec->{dest}),
             if $spec->{required}
                 && ! @$values
-                && ! defined $self->namespace->get_attr($spec->{dest});
+                && ! defined  $self->namespace->get_attr($spec->{dest});
 
         # split and expand
         # Pair are processed here as well
@@ -521,12 +581,12 @@ sub _apply_action {
             $spec,
             $self->namespace,
             $options->{ $dest2spec->{$spec->{dest}} },
-            $spec->{name}
+            $spec->{name},
         );
     }
 }
 
-# TODO: show required, default
+# TODO: show required, default, add grouping
 sub usage {
     my $self = shift;
 
@@ -550,7 +610,6 @@ sub usage {
 
     push @usage, "\n";
 
-    # TODO
     if ( values %{$self->{-position_specs}}) {
         push @usage, 'positional arguments:';
         push @usage, @{ $self->_format_usage_by_spec( $self->{-position_specs} ) };
@@ -874,6 +933,8 @@ subroutine that validates input values.
 
 The value produced if the argument is absent from the command line.
 
+Only one value is allowed for scalar argument types: Scalar, Count, and Bool.
+
 =item * required
 
 Whether or not the command-line option may be omitted (optionals only).
@@ -888,13 +949,27 @@ A name for the argument in usage messages.
 
 =item * nargs - Positional option only
 
+This only instructs how many arguments the parser consumes. The
+program still needs to specify the right type to achieve the desired
+result.
+
 =over 8
 
-=item * n (1 if not specified)
+=item * n
+
+1 if not specified
 
 =item * ?
 
+1 or 0
+
+=item * +
+
+1 or more
+
 =item * *
+
+0 or many. This will consume the rest of arguments.
 
 =back
 
@@ -908,6 +983,12 @@ namespace object.
 
 It displays a generated usage message if both @ARGV and argument list
 are empty.
+
+=head4 Parsing for Positional Arguments
+
+The parsing for positional arguments takes place after that for
+optional arguments. It will consume what's still left in the command
+line.
 
 =head4 The namespace object is accumulatively poplulated
 
