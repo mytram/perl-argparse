@@ -4,11 +4,18 @@ use Test::Exception;
 
 use ArgParse::ArgumentParser;
 
-my $parser = ArgParse::ArgumentParser->new;
+my $parser = ArgParse::ArgumentParser->new(
+    prog => 'usage.t',
+    description => 'This is the suite that contains usage message test cases',
+);
 
 ok($parser);
 
-$parser->add_argument('--foo', '-f');
+$parser->add_group_description(
+    submit => 'This is submit subcommand' x 6,
+);
+
+$parser->add_argument('--foo', '-f', group => 'submit');
 
 $parser->add_argument('--boo', type => 'Bool');
 
@@ -20,7 +27,7 @@ throws_ok (
     'not allow to override',
 );
 
-$parser->add_argument('--verbose', type => 'Count', reset => 1);
+$parser->add_argument('--verbose', type => 'Count', group => 'commit', reset => 1);
 $parser->add_argument('--email', required => 1);
 
 $parser->add_argument('--email2', '--e2', required => 1);
@@ -31,10 +38,9 @@ throws_ok(
   'dest=boo is used',
 );
 
-$parser->add_argument('boo', required => 1, dest => 'boo_post');
+$parser->add_argument('boo', required => 1, group => 'post', dest => 'boo_post');
 
 $parser->add_argument('boo2', type => 'Pair', required => 1, default => { a => 1, 3 => 90 });
-
 
 $parser->usage();
 

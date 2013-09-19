@@ -252,7 +252,7 @@ sub add_argument {
     ################
     # group - grouping options
     ################
-    my $group = delete $args->{group} || '-all';
+    my $group = delete $args->{group} || ''; # anonymous group
 
     ################
     # metavar
@@ -331,21 +331,40 @@ sub add_argument {
         delete $specs->{$spec->{dest}};
     }
 
-    croak sprintf('argparse: unknown spec parameters: %s', join(',', keys %$args)) if keys %$args;
+    croak sprintf(
+        'argparse: unknown spec parameters: %s',
+        join(',', keys %$args)
+    ) if keys %$args;
 
     # type check
     if (exists $specs->{$spec->{dest}}{type}
             && $specs->{$spec->{dest}}{type} != $spec->{type}) {
         croak sprintf(
             'argparse: not allow to override %s with different type',
-            $spec->{dest}
+            $spec->{dest},
         );
     }
 
     # override
     $specs->{$spec->{dest}} = $spec;
 
+
+    if (@flags) {
+        push @{ $self->{-groups}{$spec->{group}}{-option} }, $spec;
+    } else {
+        push @{ $self->{-groups}{$spec->{group}}{-position} }, $spec;
+    }
+
     return $self;
+}
+
+sub add_group_description {
+    my $self = shift;
+    my ($group, $desc) = @_;
+
+    return unless defined($group) && $desc;
+
+    $self->{-group_description}{$group} = $desc;
 }
 
 sub _parse_for_name_and_flags {
@@ -641,7 +660,87 @@ sub _apply_action {
 }
 
 # TODO: Add grouping
+# Get
+
 sub usage {
+    my $self = shift;
+    my $old_wrap_columns = $Text::Wrap::columns;
+
+    my @usage;
+
+    push @usage, sprintf('usage: %s', $self->prog);
+    $Text::Wrap::columns = 80;
+    push @usage, wrap('', '', $self->description);
+    push @usage, '';
+
+    for my $group ( sort keys %{ $self->{-groups} } ) {
+        push @usage, @{ $self->group_usage($group) };
+    }
+
+    $Text::Wrap::columns = $old_wrap_columns; # restore to original
+
+    push @usage, "\n";
+
+    print STDERR join("\n", @usage);
+
+    return \@usage;
+}
+
+sub group_usage {
+
+    my $self = shift;
+    my $group = shift;
+
+    my $old_wrap_columns = $Text::Wrap::columns;
+    $Text::Wrap::columns = 80;
+
+    my @usage;
+
+    my @option_specs = sort {
+        $a->{position} <=> $b->{position}
+    } @{ $self->{-groups}{$group}{-option} || [] };
+
+    my $flag_string = join(' ', map {
+            ($_->{required} ? '' : '[')
+            . join('|', @{$_->{flags}})
+            . ($_->{required} ? '' : ']')
+    } @option_specs);
+
+    my @position_specs = sort {
+        $a->{position} <=> $b->{position}
+    } @{ $self->{-groups}{$group}{-position} || [] };
+
+    my $position_string = join(' ', map {
+            ($_->{required} ? '' : '[')
+            . $_->{metavar}
+            . ($_->{required} ? '' : ']')
+    } @position_specs);
+
+    if ($group) {
+        push @usage, wrap('', '', $group . ': ' . ($self->{-group_description}{$group} || '')  );
+    }
+
+    push @usage, $position_string if $position_string;
+    push @usage, $flag_string if $flag_string;
+
+    if (@position_specs) {
+        push @usage, 'positional arguments:';
+        push @usage, @{ $self->_format_usage_by_spec(\@position_specs) };
+    }
+
+    if (@option_specs) {
+        push @usage, 'optional arguments:';
+        push @usage, @{ $self->_format_usage_by_spec(\@option_specs) };
+    }
+
+    push @usage, '';
+
+    $Text::Wrap::columns = $old_wrap_columns; # restore to original
+
+    return \@usage;
+}
+
+sub _usage {
     my $self = shift;
 
     my $old_wrap_columns = $Text::Wrap::columns;
@@ -691,11 +790,11 @@ sub _format_usage_by_spec {
     my $max = 10;
     my @item_help;
 
-    for my $spec (values %$specs) {
+    for my $spec ( @$specs ) {
         my $item = sprintf(
-            "%s %s",
+            "%s",
             join(', ',  @{$spec->{flags}}),
-            $spec->{metavar} .  ($spec->{required} ? '' : '?'),
+            $spec->{metavar},
         );
         my $len = length($item);
         $max = $len if $len > $max;
@@ -722,24 +821,25 @@ sub _format_usage_by_spec {
 
         push @item_help, [
             $item,
+            ($spec->{required} ? ' ' : '?'),
             join("\n", ($spec->{help} || 'This is option ' . $spec->{dest}), $default),
         ];
     }
 
     $max *= -1;
-    my $format = "    %${max}s    %s";
+    my $format = "    %${max}s    %s %s";
     $Text::Wrap::columns = 60;
     for my $ih (@item_help) {
         my $item_len = length($ih->[0]);
         # The prefixed whitespace in subsequent lines in the wrapped
         # help string
-        my $sub_tab = " " x (-1 * $max + 4 + 4);
-        my @help = split("\n", wrap('', '', $ih->[1]));
+        my $sub_tab = " " x (-1 * $max + 4 + 4 + 2);
+        my @help = split("\n", wrap('', '', $ih->[2]));
 
         my $help = (shift @help) || '' ;      # head
-        $_ = $sub_tab . $_ for @help; # tail
+        $_ = $sub_tab . $_ for @help;         # tail
 
-        push @usage, sprintf($format, $ih->[0], join("\n", $help, @help));
+        push @usage, sprintf($format, $ih->[0], $ih->[1], join("\n", $help, @help));
     }
 
     return \@usage;
