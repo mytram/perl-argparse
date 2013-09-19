@@ -245,9 +245,13 @@ sub add_argument {
     my $help = delete $args->{help} || '';
 
     ################
-    # group - grouping options
+    # groups - grouping options
     ################
-    my $group = delete $args->{group} || ''; # anonymous group
+    my $groups = delete $args->{groups} || [ '' ]; # anonymous group
+
+    if (ref $groups ne 'ARRAY') {
+        $groups = [ $groups ];
+    }
 
     ################
     # metavar
@@ -309,7 +313,7 @@ sub add_argument {
         dest      => $dest,
         metavar   => $metavar,
         help      => $help,
-        group     => $group,
+        groups    => $groups,
         position  => $self->{-option_position}++, # sort order
     };
 
@@ -343,12 +347,8 @@ sub add_argument {
     # override
     $specs->{$spec->{dest}} = $spec;
 
-
-    if (@flags) {
-        push @{ $self->{-groups}{$spec->{group}}{-option} }, $spec;
-    } else {
-        push @{ $self->{-groups}{$spec->{group}}{-position} }, $spec;
-    }
+    # specs changed, need to force to resort specs by groups
+    delete $self->{-groups} if $self->{-groups};
 
     return $self;
 }
@@ -654,11 +654,16 @@ sub _apply_action {
     }
 }
 
-# TODO: Add grouping
-# Get
-
+#
+#
+#
+#
+#
 sub usage {
     my $self = shift;
+
+    $self->_sort_specs_by_groups() unless $self->{-groups};
+
     my $old_wrap_columns = $Text::Wrap::columns;
 
     my @usage;
@@ -681,10 +686,33 @@ sub usage {
     return \@usage;
 }
 
-sub group_usage {
+sub _sort_specs_by_groups {
+    my $self = shift;
 
+    my $specs = $self->{-option_specs};
+
+    for my $dest ( keys %{ $specs } ) {
+        for my $group ( @{ $specs->{$dest}{groups} } ) {
+            push @{ $self->{-groups}{$group}{-option} }, $specs->{$dest};
+        }
+    }
+
+    $specs = $self->{-position_specs};
+
+    for my $dest ( keys %{ $specs } ) {
+        for my $group ( @{ $specs->{$dest}{groups} } ) {
+            push @{ $self->{-groups}{$group}{-position} }, $specs->{$dest};
+        }
+    }
+}
+
+sub group_usage {
     my $self = shift;
     my $group = shift;
+
+    unless ($self->{-groups}) {
+        $self->_sort_specs_by_groups();
+    }
 
     my $old_wrap_columns = $Text::Wrap::columns;
     $Text::Wrap::columns = 80;
@@ -731,46 +759,6 @@ sub group_usage {
     push @usage, '';
 
     $Text::Wrap::columns = $old_wrap_columns; # restore to original
-
-    return \@usage;
-}
-
-sub _usage {
-    my $self = shift;
-
-    my $old_wrap_columns = $Text::Wrap::columns;
-
-    my @usage;
-
-    my @option_specs = sort {
-        $a->{position} <=> $b->{position}
-    } values %{ $self->{-option_specs} || {} };
-
-    my $flag_string = join(' ', map {
-        ($_->{required} ? '' : '[')
-        . join('|', @{$_->{flags}})
-        . ($_->{required} ? '' : ']')
-    } @option_specs);
-
-    push @usage, sprintf('usage: %s %s', $self->prog, $flag_string);
-    $Text::Wrap::columns = 80;
-    push @usage, wrap('', '', $self->description);
-
-    if ( values %{$self->{-position_specs}}) {
-        push @usage, 'positional arguments:';
-        push @usage, @{ $self->_format_usage_by_spec( $self->{-position_specs} ) };
-    }
-
-    if ( values %{$self->{-option_specs}} ) {
-        push @usage, 'optional arguments:';
-        push @usage, @{ $self->_format_usage_by_spec( $self->{-option_specs} ) };
-    }
-
-    $Text::Wrap::columns = $old_wrap_columns; # restore to original
-
-    push @usage, "\n";
-
-    print STDERR join("\n", @usage);
 
     return \@usage;
 }

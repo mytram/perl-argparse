@@ -15,7 +15,7 @@ $parser->add_group_description(
     submit => 'This is submit subcommand' x 6,
 );
 
-$parser->add_argument('--foo', '-f', group => 'submit');
+$parser->add_argument('--foo', '-f', groups => 'submit');
 
 $parser->add_argument('--boo', type => 'Bool');
 
@@ -27,7 +27,7 @@ throws_ok (
     'not allow to override',
 );
 
-$parser->add_argument('--verbose', type => 'Count', group => 'commit', reset => 1);
+$parser->add_argument('--verbose', type => 'Count', groups => 'commit', reset => 1);
 $parser->add_argument('--email', required => 1);
 
 $parser->add_argument('--email2', '--e2', required => 1);
@@ -38,7 +38,7 @@ throws_ok(
   'dest=boo is used',
 );
 
-$parser->add_argument('boo', required => 1, group => 'post', dest => 'boo_post');
+$parser->add_argument('boo', required => 1, groups => 'post', dest => 'boo_post');
 
 $parser->add_argument('boo2', type => 'Pair', required => 1, default => { a => 1, 3 => 90 });
 
