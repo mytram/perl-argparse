@@ -37,4 +37,42 @@ ok($n->choice eq 'a', 'choice ok - fixed value a');
 
 ok($n->choice1 eq 'A', 'choice ok - case insensative A');
 
+$p = ArgParse::ArgumentParser->new();
+
+throws_ok ( sub {
+                $p->add_argument(
+                    '--choice',
+                    choices => [ 'a', 'b', 'c' ],
+                    choices_i => [ 'A', 'B', 'C' ],
+                );
+            },
+            qr/Not allow to specify/,
+            'not allow to specify choices and choices_i',
+);
+
+throws_ok(
+    sub {
+        $p->add_argument(
+            '--choice',
+            choices_i => sub { die 'choices' },
+        );
+    },
+    qr/arrayref/,
+    'only allow arrayref',
+);
+
+lives_ok(
+    sub {
+        $p->add_argument(
+            '--choice',
+            choices_i => [ 'hello', 'world' ],
+        );
+});
+
+$n = $p->parse_args('--choice', 'WORLD');
+
+ok($n->choice eq 'WORLD', "WORLD is OK");
+$n = $p->parse_args('--choice', 'HEllo');
+ok($n->choice eq 'HEllo', "HEllo is OK too");
+
 done_testing;

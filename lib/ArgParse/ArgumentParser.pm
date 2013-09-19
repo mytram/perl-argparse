@@ -227,6 +227,18 @@ sub add_argument {
         croak 'argparse: ' .  "Must provide choices in an arrayref or a coderef";
     }
 
+    my $choices_i = delete $args->{choices_i} || undef;
+
+    if ($choices && $choices_i) {
+        croak 'argparse: ' . 'Not allow to specify choices and choices_i';
+    }
+
+    if (   $choices_i
+        && ref($choices_i) ne 'ARRAY' )
+    {
+        croak 'argparse: ' .  "Must provide choices_i in an arrayref";
+    }
+
     ################
     # required
     ################
@@ -289,20 +301,21 @@ sub add_argument {
     # never modify existing ones so that the parent's structure will
     # not be modified
     my $spec = {
-        name     => $name,
-        flags    => \@flags,
-        action   => $action,
-        nargs	 => $nargs,
-        split    => $split,
-        required => $required || '',
-        type     => $type,
-        default  => $default,
-        choices  => $choices,
-        dest     => $dest,
-        metavar  => $metavar,
-        help     => $help,
-        group    => $group,
-        position => $self->{-option_position}++, # sort order
+        name      => $name,
+        flags     => \@flags,
+        action    => $action,
+        nargs     => $nargs,
+        split     => $split,
+        required  => $required || '',
+        type      => $type,
+        default   => $default,
+        choices   => $choices,
+        choices_i => $choices_i,
+        dest      => $dest,
+        metavar   => $metavar,
+        help      => $help,
+        group     => $group,
+        position  => $self->{-option_position}++, # sort order
     };
 
     my $specs;
@@ -379,6 +392,8 @@ sub parse_args {
         $a->{position} <=> $b->{position}
     } values %{$self->{-position_specs}};
 
+    $self->namespace(ArgParse::Namespace->new) unless $self->namespace;
+
     unless (@argv) {
         for (@option_specs, @position_specs) {
             # only show usage if no args will be populated due to an
@@ -394,8 +409,6 @@ sub parse_args {
             # otherwise continue to initialise options
         }
     }
-
-    $self->namespace(ArgParse::Namespace->new) unless $self->namespace;
 
     $self->{-argv} = \@argv;
 
@@ -580,6 +593,23 @@ sub _post_parse_processing {
                 }
             }
         }
+
+        if ( $spec->{choices_i} ) {
+            my %choices =
+                    map { defined($_) ? uc($_) : '_undef' => 1 }
+                    @{$spec->{choices_i}};
+
+          VALUE:
+            for my $v (@$values) {
+                my $k = defined($v) ? uc($v) : '_undef';
+                next VALUE if exists $choices{$k};
+
+                return sprintf(
+                    "option %s value %s not in allowed choices: [ %s ] (case insensitive)",
+                    $spec->{dest}, $v, join( ', ', @{ $spec->{choices_i} } ),
+                );
+            }
+        }
     }
 
     return '';
@@ -610,7 +640,7 @@ sub _apply_action {
     }
 }
 
-# TODO: show required, default, add grouping
+# TODO: Add grouping
 sub usage {
     my $self = shift;
 
@@ -631,8 +661,6 @@ sub usage {
     push @usage, sprintf('usage: %s %s', $self->prog, $flag_string);
     $Text::Wrap::columns = 80;
     push @usage, wrap('', '', $self->description);
-
-    push @usage, "\n";
 
     if ( values %{$self->{-position_specs}}) {
         push @usage, 'positional arguments:';
@@ -976,10 +1004,17 @@ split => ',', a,b,c will be split into [ 'a', 'b', 'c' ].When split
 works with type 'Pair', the parser will split the argument string and
 then parse each of them as pairs.
 
-=item * choices
+=item * choices or choices_i
 
-Specify A list of the allowable values for the argument or a
+choices specifies a list of the allowable values for the argument or a
 subroutine that validates input values.
+
+choices_i specifies a list of the allowable values for the argument,
+but case insenstive, and it doesn't allow to use a subroutine for
+validation.
+
+Either choices or chioces_i can be present or completely omitted, but
+not both at the same time.
 
 =item * default
 
