@@ -2,9 +2,9 @@ use lib "lib";
 use Test::More;
 use Test::Exception;
 
-use ArgParse::ArgumentParser;
+use Getopt::ArgParse::Parser;
 
-$p = ArgParse::ArgumentParser->new();
+$p = Getopt::ArgParse::Parser->new();
 ok($p, "new argparser");
 
 $p->add_argument(
@@ -37,7 +37,7 @@ ok($n->choice eq 'a', 'choice ok - fixed value a');
 
 ok($n->choice1 eq 'A', 'choice ok - case insensative A');
 
-$p = ArgParse::ArgumentParser->new();
+$p = Getopt::ArgParse::Parser->new();
 
 throws_ok ( sub {
                 $p->add_argument(

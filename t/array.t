@@ -2,9 +2,9 @@ use lib "lib";
 use Test::More; # tests => 4;
 use Test::Exception;
 
-use ArgParse::ArgumentParser;
+use Getopt::ArgParse::Parser;
 
-$p = ArgParse::ArgumentParser->new();
+$p = Getopt::ArgParse::Parser->new();
 ok($p, "new argparser");
 
 # Miminal set up
@@ -29,7 +29,7 @@ $ns = $p->parse_args(split(' ', $line));
 diag(join ', ', @emails);
 ok(scalar @emails == 0, 'append - minimal setup,not specified');
 
-$p = ArgParse::ArgumentParser->new();
+$p = Getopt::ArgParse::Parser->new();
 $p->add_argument('--foo');
 $p->add_argument(
     '--email', '-e',
@@ -62,7 +62,7 @@ ok($emails->[0] eq 'abc@perl.org', 'append - ref - element');
 
 
 # positional options
-$p = ArgParse::ArgumentParser->new();
+$p = Getopt::ArgParse::Parser->new();
 ok($p, "new argparser");
 
 $p->add_argument('boo', nargs => 3, type => 'Array');

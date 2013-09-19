@@ -7,15 +7,15 @@ my %WriteMakefileArgs = (
     'ABSTRACT' => 'A Perl argument parser',
     'AUTHOR' => 'Mytram <mytram2@gmail.com>',
     'BUILD_REQUIRES' => {},
-    'DISTNAME' => 'ArgParse',
+    'DISTNAME' => 'GetoptArgParse',
     'EXE_FILES' => [],
     'LICENSE' => 'artistic',
-    'NAME' => 'ArgParse::ArgumentParser',
+    'NAME' => 'GetoptArgParse',
     'PREREQ_PM' => {
         'Moo'          => '1.003',
         'Getopt::Long' => '2.38',
     },
-    'VERSION_FROM' => 'lib/ArgParse/ArgumentParser.pm',
+    'VERSION_FROM' => 'lib/Getopt/ArgParse.pm',
     'test' => {
         'TESTS' => 't/*.t'
     },

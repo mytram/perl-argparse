@@ -1,9 +1,9 @@
-package ArgParse::ActionAppend;
+package Getopt::ArgParse::ActionAppend;
 
 use strict;
 use Carp;
 
-use ArgParse::ArgumentParser;
+use Getopt::ArgParse::Parser;
 
 sub apply {
     my $self = shift;
@@ -12,7 +12,7 @@ sub apply {
 
     $values ||= [];
 
-    if ($spec->{type} == ArgParse::ArgumentParser::TYPE_BOOL) {
+    if ($spec->{type} == Getopt::ArgParse::Parser::TYPE_BOOL) {
         croak 'argparse: appending to type Bool not allowed';
     }
 
@@ -22,7 +22,7 @@ sub apply {
         croak 'argparse: argument type conflict: expected Pair or Array';
     }
 
-    if ($spec->{type} == ArgParse::ArgumentParser::TYPE_PAIR) {
+    if ($spec->{type} == Getopt::ArgParse::Parser::TYPE_PAIR) {
         $v = {} unless defined $v;
 
         for my $pair (@$values) {

@@ -1,4 +1,4 @@
-package ArgParse::Namespace;
+package Getopt::ArgParse::Namespace;
 
 use Carp;
 use strict;

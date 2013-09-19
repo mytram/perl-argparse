@@ -2,9 +2,9 @@ use lib "lib";
 use Test::More; # tests => 4;
 use Test::Exception;
 
-use ArgParse::ArgumentParser;
+use Getopt::ArgParse::Parser;
 
-my $parser = ArgParse::ArgumentParser->new(
+my $parser = Getopt::ArgParse::Parser->new(
     prog => 'usage.t',
     description => 'This is the suite that contains usage message test cases',
 );

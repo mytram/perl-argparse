@@ -2,9 +2,9 @@ use lib 'lib';
 use Test::More; # tests => 10;
 use Test::Exception;
 
-use ArgParse::ArgumentParser;
+use Getopt::ArgParse::Parser;
 
-$p = ArgParse::ArgumentParser->new();
+$p = Getopt::ArgParse::Parser->new();
 ok($p, "new argparser");
 
 $p->add_argument('--required-option', required => 1);
@@ -23,7 +23,7 @@ lives_ok(
 ok($n->required_option eq "hello", "required_option");
 ok($n->optional_option eq 'hello', "optional_option is hello");
 
-$p->namespace(ArgParse::Namespace->new()); # Clear out required-option
+$p->namespace(Getopt::ArgParse::Namespace->new()); # Clear out required-option
 # multiple parsing preserves previous values
 $n = $p->namespace;
 
@@ -36,7 +36,7 @@ throws_ok(
 );
 
 # postional options
-$p = ArgParse::ArgumentParser->new();
+$p = Getopt::ArgParse::Parser->new();
 
 $p->add_argument('-f');
 $p->add_argument('boo'); # not required

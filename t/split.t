@@ -2,9 +2,9 @@ use lib "lib";
 use Test::More; # tests => 4;
 use Test::Exception;
 
-use ArgParse::ArgumentParser;
+use Getopt::ArgParse::Parser;
 
-$p = ArgParse::ArgumentParser->new();
+$p = Getopt::ArgParse::Parser->new();
 ok($p, "new argparser");
 
 $p->add_argument(

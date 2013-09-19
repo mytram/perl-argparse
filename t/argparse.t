@@ -1,17 +1,19 @@
-use lib 'lib';
-use lib '../lib';
 use Test::More;
 use Test::Exception;
 
-BEGIN { use_ok ( 'ArgParse::ArgumentParser' ) };
+use lib 'lib';
+use lib '../lib';
 
-require_ok('ArgParse::ArgumentParser');
-require_ok('ArgParse::ActionStore');
-require_ok('ArgParse::ActionAppend');
+BEGIN { use_ok ( 'Getopt::ArgParse' ) };
+
+require_ok('Getopt::ArgParse::Parser');
+require_ok('Getopt::ArgParse::ActionStore');
+require_ok('Getopt::ArgParse::ActionAppend');
+require_ok('Getopt::ArgParse::ActionCount');
 
 my $ns;
 
-my $parser = ArgParse::ArgumentParser->new();
+my $parser = Getopt::ArgParse->new_parser();
 
 ok($parser, 'new parser');
 
@@ -49,7 +51,7 @@ diag(join(',', @values));
 ok( scalar(@values) eq 3, 'action append');
 
 # positional args
-$p = ArgParse::ArgumentParser->new();
+$p = Getopt::ArgParse->new_parser();
 $p->add_argument(
     'command',
 );

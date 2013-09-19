@@ -1,8 +1,10 @@
-package ArgParse::ActionStore;
+package Getopt::ArgParse::ActionStore;
 
 use strict;
 use warnings;
 use Carp;
+
+use Getopt::ArgParse::Parser;
 
 sub apply {
     my $self = shift;
@@ -13,7 +15,7 @@ sub apply {
     croak sprintf('%s can only have one value', $spec->{dest})
         if @$values > 1;
 
-    if ($spec->{type} == ArgParse::ArgumentParser::TYPE_BOOL) {
+    if ($spec->{type} == Getopt::ArgParse::Parser::TYPE_BOOL) {
         # If there is default true or false
         my $default = $spec->{default} || [ 0 ];
 

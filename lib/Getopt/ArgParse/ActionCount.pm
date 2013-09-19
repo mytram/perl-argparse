@@ -1,4 +1,4 @@
-package ArgParse::ActionCount;
+package Getopt::ArgParse::ActionCount;
 
 use strict;
 use warnings;

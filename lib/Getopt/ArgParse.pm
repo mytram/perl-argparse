@@ -24,7 +24,8 @@ sub new_parser {
 
 =head1 NAME
 
-Getopt::ArgParse - Parsing arugments with a more user-friendly interface
+Getopt::ArgParse - Parsing command line arguments with a user-friendly
+interface, similar to python's argpare but with perlish extras
 
 =head1 VERSION
 
@@ -32,9 +33,9 @@ version 0.01
 
 =head1 SYNOPSIS
 
- use Getopt::ArgParse::Parser;
+ use Getopt::ArgParse;
 
- $ap = Getopt::ArgParse::Parser->new(
+ $ap = Getopt::ArgParse->new_parser(
  	prog        => 'MyProgramName',
  	description => 'This is a program',
  );
