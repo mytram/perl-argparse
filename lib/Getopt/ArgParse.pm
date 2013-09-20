@@ -48,7 +48,7 @@ version 0.01
  $ap->add_argument('--bool', '-b', type => 'Bool', dest => 'boo');
 
  # Parse a positonal option
- $ap->add_arguement('command', required => 1);
+ $ap->add_argument('command', required => 1);
 
  # $ns is also accessible via $ap->namespace
  my $ns = $ap->parse_args(split(' ', 'test -f 1 -b');
@@ -78,11 +78,11 @@ version 0.01
  say $ns->param->{c}; # 3
 
  # You can use choice to restrict values
- $ap->add_arguemnt('--env', choices => [ 'dev', 'prod' ]);
+ $ap->add_argument('--env', choices => [ 'dev', 'prod' ]);
 
  # or use case-insensitive choices
  # Override the previous option
- $ap->add_arguemnt('--env', choices_i => [ 'dev', 'prod' ]);
+ $ap->add_argument('--env', choices_i => [ 'dev', 'prod' ]);
 
  # or use a coderef
  # Override the previous option
@@ -95,14 +95,14 @@ version 0.01
 
 =head1 DESCRIPTIOIN
 
-Getopt::ArgParse::Parser and related classes together aim to provide
-user-friendly interfaces for writing command-line interfaces. A user
-should be able to use it without looking up the document most of the
-time. It allows applications to define argument specifications and it
-will parse them out of @AGRV by default or a command line if
-provided. It implements both optional arguments, using Getopt::Long
-for parsing, and positional arguments. The class also generates help
-and usage messages.
+Getopt::ArgParse, Getopt::ArgParse::Parser and related classes
+together aim to provide user-friendly interfaces for writing
+command-line interfaces. A user should be able to use it without
+looking up the document most of the time. It allows applications to
+define argument specifications and it will parse them out of @AGRV by
+default or a command line if provided. It implements both optional
+arguments, using Getopt::Long for parsing, and positional
+arguments. The class also generates help and usage messages.
 
 The parser has a namespace property, which is an object of
 ArgParser::Namespace. The parsed argument values are stored in this
@@ -110,7 +110,7 @@ namespace property. Moreover, the values are stored accumulatively
 when parse_args() is called multiple times.
 
 Though inspired by Python's argparse and names and ideas are borrowed
-from it, it doesn't work exactly the same as argparse .
+from it, there is a lot of difference from the Python one.
 
 Getopt::ArgParse::Parser is a Moo class.
 
@@ -118,9 +118,10 @@ Getopt::ArgParse::Parser is a Moo class.
 
 =head3 Constructor
 
-Getopt::ArgParse::Parser->new( ... )
+Getopt::ArgParse->new_parser( ...) or Getopt::ArgParse::Parser->new( ... )
 
-This will create a new parser. It accepts the following parameters.
+The former calls Getopt::ArgParser::Parser->new to create a parser
+object.  The parser constructor accepts the following parameters.
 
 =over 8
 
@@ -262,6 +263,15 @@ A brief description of what the argument does.
 
 A name for the argument in usage messages.
 
+=item * groups
+
+Specify which option groups the current option belongs to. Usage
+messages will be grouped together.
+
+By default, an option is put under an unnamed group.
+
+=cut
+
 =item * nargs - Positional option only
 
 This only instructs how many arguments the parser consumes. The
@@ -316,6 +326,24 @@ for a Count option, it will add on top of the previous value.
 In face, the program can choose to pass a already populated namespace
 when creating a parser object. This is to allow the program to pre-load
 values to a namespace from conf files before parsing the command line.
+
+=head3 argv()
+
+Call this after parse_args() is invoked to get the unconsumed
+arguments.
+
+=head2 Usage Messages and Related Methods
+
+Call usage() to retrieve a full usage message or call group_usage() to
+customize usage messages at a finer level.
+
+=head3 group_usage( [$group] )
+
+Return the usage messages for the $group group. If $group is not
+given, it returns the usage messages for the default group.
+
+
+=head3
 
 =head1 SEE ALSO
 

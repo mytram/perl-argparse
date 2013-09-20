@@ -5,6 +5,7 @@ use Moo;
 use Carp;
 use Getopt::Long qw(GetOptionsFromArray);
 use Text::Wrap;
+use Scalar::Util qw(blessed);
 
 use Getopt::ArgParse::Namespace;
 
@@ -25,6 +26,9 @@ use constant {
     PairArg   => 'Pair',
     CountArg  => 'Count',
     BoolArg   => 'Bool',
+
+	# Internal
+    ERROR_PREFIX => 'Getopt::ArgParse: ',
 };
 
 # Allow customization
@@ -34,8 +38,8 @@ my %Action2ClassMap = (
     '_append'      => 'Getopt::ArgParse::ActionAppend',
     '_count'       => 'Getopt::ArgParse::ActionCount',
     # Not supported
-    # '_help'        => 'ArgParse::ActionHelp',
-    # '_version'     => 'ArgParse::ActionVersion',
+    # '_help'        => 'Getopt::ArgParse::ActionHelp',
+    # '_version'     => 'Getopt::ArgParse::ActionVersion',
 );
 
 my %Type2ConstMap = (
@@ -58,13 +62,13 @@ has description => ( is => 'rw', required => 1, default => sub { '' }, );
 # namespace() - Read/write
 
 # Contains the parsed results.
-
 has namespace => (
     is => 'rw',
     isa => sub {
         return undef unless $_[0]; # allow undef
-        my $class = ref $_[0] || $_[0];
-        croak 'argparse: ' .  "Must provide a Namespace" unless $class;
+        my $class = blessed $_[0];
+        die 'namespace doesn\'t comform to the required interface'
+            unless $class && $class->can('set_attr') && $class->can('get_attr');
     },
 );
 
@@ -73,9 +77,9 @@ has namespace => (
 has parent => (
     is => 'ro',
        isa => sub {
-           my $parent_class = ref $_[0] || $_[0];
-        die 'Parent must be an ArgumentParser'
-            unless $parent_class->isa(__PACKAGE__);
+           my $parent_class = blessed $_[0];
+        die 'parent is not a Getopt::ArgParse::Parser'
+            unless $parent_class && $parent_class->isa(__PACKAGE__);
     },
     required => 0,
 );
@@ -99,19 +103,82 @@ sub BUILD {
     $self->add_argument(
         '--help', '-h',
         type => 'Bool',
+        dest => 'help_flag',
         help => 'show this help message and exit',
-    );
-
-    $self->add_argument(
-        '--verbose', '-v',
-        type => 'Bool',
-        help => 'verbose output',
     );
 
     # merge
     if ($self->parent) {
         $self->add_arguments( @ { $self->parent->{-pristine_add_arguments} || [] } );
     }
+}
+
+# subcommands
+
+sub add_subparsers {
+    my $self = shift;
+
+    croak ERROR_PREFIX .  'incorrect number of arguments' if scalar(@_) % 2;
+
+    my $args = { @_ };
+
+    my $title = (delete $args->{title} || 'Subcommands') . ':';
+    my $description = delete $args->{description} || '';
+
+   croak ERROR_PREFIX . sprintf(
+        'unknown parameters: %s',
+        join(',', keys %$args)
+    ) if keys %$args;
+
+    $self->{-subparsers}{-title} = $title;
+    $self->{-subparsers}{-description} = $description;
+
+    $self->{-subparsers}{-alias_map} = {};
+
+    return $self;
+}
+
+# $command, alias => [], help => ''
+sub add_parser {
+    my $self = shift;
+    croak ERROR_PREFIX . 'add_subparsers() is not called first' unless $self->{-subparsers};
+
+    my $command = shift;
+
+    croak ERROR_PREFIX . 'subcommand is empty' unless $command;
+
+    croak ERROR_PREFIX .  'incorrect number of arguments' if scalar(@_) % 2;
+
+    my $args = { @_ };
+
+    my $help = delete $args->{help} || '';
+    my $aliases = delete $args->{aliases} || [];
+    croak ERROR_PREFIX . 'aliases is not an arrayref'
+        if ref($aliases) ne 'ARRAY';
+
+    for my $alias (@$aliases) {
+        if (exists $self->{-subparsers}{-alias_map}{$alias}) {
+            croak ERROR_PREFIX . "alias=$alias already used by command=" . $self->{-subparsers}{-alias_map}{$alias};
+        }
+        $self->{-subparsers}{-alias_map}{$alias} = $command;
+    }
+
+    croak ERROR_PREFIX . sprintf(
+        'unknown parameters: %s',
+        join(',', keys %$args)
+    ) if keys %$args;
+
+    $self->{-subparsers}{-alias_map}{$command} = $command;
+
+    my $prog = $command;
+    if (@$aliases) {
+        $prog .= ' (' . join(', ', @$aliases) . ')';
+    }
+
+    return $self->{-subparsers}{-parsers}{$command} = __PACKAGE__->new(
+        prog        => $prog,
+        description => $help,
+    );
 }
 
 # add_arguments([arg_spec], [arg_spec1], ...)
@@ -123,20 +190,25 @@ sub add_arguments {
     $self->add_argument(@$_) for @_;
 }
 
+# set_group
 sub add_argument {
     my $self = shift;
 
     return unless @_; # mostly harmless
 
+    #
+    # FIXME: This is for merginng parent parents This is a dirty hack
+    # and should be done properly by merging internal specs
+    #
     push @{ $self->{-pristine_add_arguments} }, [ @_ ];
 
     my ($name, $flags, $rest) = $self->_parse_for_name_and_flags([ @_ ]);
 
-    croak 'argparse: ' .  "Incorrect arguments" if scalar(@$rest) % 2;
+    croak ERROR_PREFIX .  'incorrect number of arguments' if scalar(@$rest) % 2;
+
+    croak ERROR_PREFIX .  'empty option name' unless $name;
 
     my $args = { @$rest };
-
-    croak 'argparse: ' .  "Must provide at least one non-empty argument name" unless $name;
 
     my @flags = @{ $flags || [] };
 
@@ -146,7 +218,7 @@ sub add_argument {
     my $type_name = delete $args->{type} || '';
     my $type = $Type2ConstMap{$type_name} if exists $Type2ConstMap{$type_name};
 
-    croak 'argparse: ' .  "Unknown type: $type_name" unless defined $type;
+    croak ERROR_PREFIX . "unknown type=$type_name" unless defined $type;
 
     if ($type == TYPE_COUNT) {
         $args->{action} = '_count' unless defined $args->{action};
@@ -173,7 +245,7 @@ sub add_argument {
 
         eval "require $action";
 
-        croak 'argparse: ' .  "Cannot find the module for action $action" if $@;
+        croak ERROR_PREFIX .  "Cannot load $action for action=$action_name" if $@;
     };
 
     ################
@@ -181,11 +253,11 @@ sub add_argument {
     ################
     my $split = delete $args->{split};
     if (defined $split && !$split && $split =~ /^ +$/) {
-        croak 'argparse: ' .  'cannot split by whitespaces';
+        croak ERROR_PREFIX .  'cannot use whitespaces to split';
     }
 
     if (defined $split && $type != TYPE_ARRAY && $type != TYPE_PAIR) {
-        croak 'argparse: ' .  'Only allow split to be used with either Array or Pair type';
+        croak ERROR_PREFIX .  'split only for Array and Pair';
     }
 
     ################
@@ -197,7 +269,7 @@ sub add_argument {
         if (ref($val) eq 'ARRAY') {
             $default = $val;
         } elsif (ref($val) eq 'HASH') {
-            croak 'argparse: ' .  'HASH default only for Pair type options'
+            croak ERROR_PREFIX .  'HASH default only for type Pair'
                 if $type != TYPE_PAIR;
             $default = $val;
         } else {
@@ -206,7 +278,7 @@ sub add_argument {
 
         if ($type != TYPE_PAIR) {
             if ($type != TYPE_ARRAY && scalar(@$default) > 1) {
-                croak 'argparse: ' . 'multiple default values for scalar type: $name';
+                croak ERROR_PREFIX . 'multiple default values for scalar type: $name';
             }
         }
     }
@@ -219,19 +291,19 @@ sub add_argument {
         && ref($choices) ne 'CODE'
         && ref($choices) ne 'ARRAY' )
     {
-        croak 'argparse: ' .  "Must provide choices in an arrayref or a coderef";
+        croak ERROR_PREFIX .  "must provide choices in an arrayref or a coderef";
     }
 
     my $choices_i = delete $args->{choices_i} || undef;
 
     if ($choices && $choices_i) {
-        croak 'argparse: ' . 'Not allow to specify choices and choices_i';
+        croak ERROR_PREFIX . 'not allow to specify choices and choices_i';
     }
 
     if (   $choices_i
         && ref($choices_i) ne 'ARRAY' )
     {
-        croak 'argparse: ' .  "Must provide choices_i in an arrayref";
+        croak ERROR_PREFIX .  "must provide choices_i in an arrayref";
     }
 
     ################
@@ -243,15 +315,6 @@ sub add_argument {
     # help
     ################
     my $help = delete $args->{help} || '';
-
-    ################
-    # groups - grouping options
-    ################
-    my $groups = delete $args->{groups} || [ '' ]; # anonymous group
-
-    if (ref $groups ne 'ARRAY') {
-        $groups = [ $groups ];
-    }
 
     ################
     # metavar
@@ -272,18 +335,18 @@ sub add_argument {
         while (my ($d, $s) = each %{$self->{-option_specs}}) {
             if ($dest ne $d) {
                 for my $f (@flags) {
-                   croak 'argparse: ' .  "$f already used for a different option ($d)"
+                   croak ERROR_PREFIX .  "flag $f already used for a different option ($d)"
                         if grep { $f eq $_ } @{$s->{flags}};
                 }
             }
         }
 
         if (exists $self->{-position_specs}{$dest}) {
-            croak "argparse: dest=$dest is used by a positional argument";
+            croak ERROR_PREFIX . "dest=$dest already used by a positional argument";
         }
     } else {
         if (exists $self->{-option_specs}{$dest}) {
-            croak "argparse: dest=$dest is used by an optional argument";
+            croak ERROR_PREFIX . "dest=$dest already used by an optional argument";
         }
     }
 
@@ -294,7 +357,7 @@ sub add_argument {
     my $nargs = delete $args->{nargs};
 
     if (defined $nargs ) {
-        croak 'argparse: ' . 'nargs only allowed for positional options' if @flags;
+        croak ERROR_PREFIX . 'nargs only allowed for positional options' if @flags;
     }
 
     # never modify existing ones so that the parent's structure will
@@ -313,8 +376,8 @@ sub add_argument {
         dest      => $dest,
         metavar   => $metavar,
         help      => $help,
-        groups    => $groups,
         position  => $self->{-option_position}++, # sort order
+        groups    => [ '' ],
     };
 
     my $specs;
@@ -330,16 +393,16 @@ sub add_argument {
         delete $specs->{$spec->{dest}};
     }
 
-    croak sprintf(
-        'argparse: unknown spec parameters: %s',
+    croak ERROR_PREFIX . sprintf(
+        'unknown spec parameters: %s',
         join(',', keys %$args)
     ) if keys %$args;
 
     # type check
     if (exists $specs->{$spec->{dest}}{type}
             && $specs->{$spec->{dest}}{type} != $spec->{type}) {
-        croak sprintf(
-            'argparse: not allow to override %s with different type',
+        croak ERROR_PREFIX . sprintf(
+            'not allow to override %s with different type',
             $spec->{dest},
         );
     }
@@ -351,15 +414,6 @@ sub add_argument {
     delete $self->{-groups} if $self->{-groups};
 
     return $self;
-}
-
-sub add_group_description {
-    my $self = shift;
-    my ($group, $desc) = @_;
-
-    return unless defined($group) && $desc;
-
-    $self->{-group_description}{$group} = $desc;
 }
 
 sub _parse_for_name_and_flags {
@@ -384,6 +438,7 @@ sub _parse_for_name_and_flags {
     return ( $name, \@flags, $args );
 }
 
+#
 # parse_args([@_])
 #
 # Parse @ARGV if called without passing arguments. It returns an
@@ -394,7 +449,7 @@ sub _parse_for_name_and_flags {
 sub parse_args {
     my $self = shift;
 
-    my @saved_argv = @ARGV;
+    $self->{-saved_argv} = @ARGV;
 
     my @argv = scalar(@_) ? @_ : @ARGV;
 
@@ -408,21 +463,21 @@ sub parse_args {
 
     $self->namespace(Getopt::ArgParse::Namespace->new) unless $self->namespace;
 
-    unless (@argv) {
-        for (@option_specs, @position_specs) {
-            # only show usage if no args will be populated due to an
-            # empty command line
-            if ( $_->{required}
-                     && !defined($_->{default})
-                     && !defined($self->namespace->get_attr($_->{dest}))
-            )
-            {
-                $self->usage();
-                exit(0);
-            }
-            # otherwise continue to initialise options
-        }
-    }
+    # unless (@argv) {
+    #     for (@option_specs, @position_specs) {
+    #         # only show usage if no args will be populated due to an
+    #         # empty command line
+    #         if ( $_->{required}
+    #                  && !defined($_->{default})
+    #                  && !defined($self->namespace->get_attr($_->{dest}))
+    #         )
+    #         {
+    #             $self->usage();
+    #             exit(0);
+    #         }
+    #         # otherwise continue to initialise options
+    #     }
+    # }
 
     $self->{-argv} = \@argv;
 
@@ -430,12 +485,52 @@ sub parse_args {
 
     $self->_parse_positional_args(\@position_specs) if @position_specs;
 
-    if ($self->namespace->get_attr('help')) {
-        my $usage = $self->usage();
+    if (exists $self->{-subparsers}) {
+        $self->_parse_subcommand();
+    }
+
+    if ($self->namespace->get_attr('help_flag')) {
+        $self->print_usage();
         exit(0);
     }
 
     return $self->namespace;
+}
+
+sub _subcommand_parser {
+    my $self = shift;
+    my $alias = shift;
+
+    my $command = $self->{-subparsers}{-alias_map}{$alias}
+        if exists $self->{-subparsers}{-alias_map}{$alias};
+
+    return unless $command;
+
+    # The subcommand parser must exist if the alias is mapped
+    return $self->{-subparsers}{-parsers}{$command};
+}
+
+sub _parse_subcommand {
+    my $self = shift;
+    my $alias = shift @{$self->{-argv}};
+
+    return unless $alias;
+
+    my $subp = $self->_subcommand_parser($alias);
+    croak ERROR_PREFIX . "$alias is not a subcommand. See help" unless $subp;
+
+    $subp->namespace($self->namespace);
+    $subp->parse_args( @{$self->{-argv}} );
+
+    $self->{-argv} = $subp->{-argv};
+}
+
+# After each call of parse_args(), call this to retrieve any
+# unconsumed arguments
+
+sub argv {
+    my @argv = @{ $_[0]->{-argv} || [] };
+    wantarray ? @argv  : \@argv;
 }
 
 sub _parse_optional_args {
@@ -459,7 +554,7 @@ sub _parse_optional_args {
         my $result = GetOptionsFromArray( $self->{-argv}, %$options );
 
         if ($warn || !$result) {
-            croak 'argparse: ' .  "Getoptions error: $warn";
+            croak ERROR_PREFIX .  "error: $warn";
         }
     }
 
@@ -467,7 +562,7 @@ sub _parse_optional_args {
 
     my $error = $self->_post_parse_processing( $specs, $options, $dest2spec );
 
-    croak 'argparse: ' .  $error if $error;
+    croak ERROR_PREFIX .  $error if $error;
 
     $self->_apply_action($specs, $options, $dest2spec);
 }
@@ -491,7 +586,7 @@ sub _parse_positional_args {
         my $values = $options->{$spec->{dest}};
 
         if ($spec->{type} == TYPE_BOOL) {
-            croak 'argparse: ' .  'Bool not allowed for positional arguments';
+            croak ERROR_PREFIX .  'Bool not allowed for positional arguments';
         }
 
         my $number = 1;
@@ -500,12 +595,12 @@ sub _parse_positional_args {
             if ($nargs eq '?') {
                 $number = 1;
             } elsif ($nargs eq '+') {
-                croak 'argparse: ' . "too few arguments: narg='+'" unless @{$self->{-argv}};
+                croak ERROR_PREFIX . "too few arguments: narg='+'" unless @{$self->{-argv}};
                 $number = scalar @{$self->{-argv}};
             } elsif ($nargs eq '*') { # remainder
                 $number = scalar @{$self->{-argv}};
             } elsif ($nargs !~ /^\d+$/) {
-                croak 'argparse: ' .  'invalid nargs:' . $nargs;
+                croak ERROR_PREFIX .  'invalid nargs:' . $nargs;
             } else {
                 $number = $nargs;
             }
@@ -517,9 +612,8 @@ sub _parse_positional_args {
         # If there are values, make sure there is the right number of
         # values
         if (scalar(@$values) && scalar(@$values) != $number) {
-            croak(
-                sprintf(
-                    'argparse: not enough arguments for %s: expected:%d,actual:%d',
+            croak(ERROR_PREFIX . sprintf(
+                    'not enough arguments for %s: expected:%d,actual:%d',
                     $spec->{dest}, $number, scalar(@$values),
                 )
             );
@@ -527,7 +621,7 @@ sub _parse_positional_args {
     }
 
     my $error = $self->_post_parse_processing($specs, $options, $dest2spec);
-    croak 'argparse: ' .  $error if $error;
+    croak ERROR_PREFIX .  $error if $error;
 
     $self->_apply_action($specs, $options, $dest2spec);
 }
@@ -655,11 +749,13 @@ sub _apply_action {
 }
 
 #
-#
-#
-#
-#
-sub usage {
+sub print_usage {
+    my $self = shift;
+
+    print STDERR $_, "\n" for @{$self->format_usage};
+}
+
+sub format_usage {
     my $self = shift;
 
     $self->_sort_specs_by_groups() unless $self->{-groups};
@@ -668,24 +764,50 @@ sub usage {
 
     my @usage;
 
-    push @usage, sprintf('usage: %s', $self->prog);
+    push @usage, wrap('', '', $self->prog. ': ' . $self->description);
+
+    my ($help, $option_string) =  $self->_format_group_usage();
     $Text::Wrap::columns = 80;
-    push @usage, wrap('', '', $self->description);
+
+    my $header = sprintf(
+        'usage: %s %s',
+        $self->prog, $option_string
+    );
+
+    push @usage, wrap('', '', $header);
+
     push @usage, '';
 
-    for my $group ( sort keys %{ $self->{-groups} } ) {
-        push @usage, @{ $self->group_usage($group) };
+    push @usage, @$help;
+
+    if (exists $self->{-subparsers}) {
+        push @usage, wrap('', '', $self->{-subparsers}{-title});
+        push @usage, wrap('', '', $self->{-subparsers}{-description}) if $self->{-subparsers}{-description};
+
+        for my $parser ( values %{$self->{-subparsers}{-parsers}} ) {
+            push @usage, sprintf('  %-12s%s', $parser->prog, $parser->description);
+            # FIXME - folding description
+        }
     }
 
     $Text::Wrap::columns = $old_wrap_columns; # restore to original
 
-    push @usage, "\n";
-
-    print STDERR join("\n", @usage);
+    push @usage, '';
 
     return \@usage;
 }
 
+sub format_command_usage {
+    my $self = shift;
+    my $alias = shift;
+
+    my $subp = $self->_subcommand_parser($alias);
+    return '' unless $subp;
+
+    return $subp->format_usage();
+}
+
+# FIXME: Maybe we should remove this grouping thing
 sub _sort_specs_by_groups {
     my $self = shift;
 
@@ -706,9 +828,10 @@ sub _sort_specs_by_groups {
     }
 }
 
-sub group_usage {
+sub _format_group_usage {
     my $self = shift;
-    my $group = shift;
+    my $group = '';
+    # my $group = shift || '';
 
     unless ($self->{-groups}) {
         $self->_sort_specs_by_groups();
@@ -723,28 +846,30 @@ sub group_usage {
         $a->{position} <=> $b->{position}
     } @{ $self->{-groups}{$group}{-option} || [] };
 
-    my $flag_string = join(' ', map {
+    my @flag_items = map {
             ($_->{required} ? '' : '[')
             . join('|', @{$_->{flags}})
             . ($_->{required} ? '' : ']')
-    } @option_specs);
+    } @option_specs;
 
     my @position_specs = sort {
         $a->{position} <=> $b->{position}
     } @{ $self->{-groups}{$group}{-position} || [] };
 
-    my $position_string = join(' ', map {
+    my @position_items = map {
             ($_->{required} ? '' : '[')
             . $_->{metavar}
             . ($_->{required} ? '' : ']')
-    } @position_specs);
+    } @position_specs;
+
+    my @subcommand_items = ('<command>', '[<args>]') if exists $self->{-subparsers};
 
     if ($group) {
         push @usage, wrap('', '', $group . ': ' . ($self->{-group_description}{$group} || '')  );
     }
 
-    push @usage, $position_string if $position_string;
-    push @usage, $flag_string if $flag_string;
+    # push @usage, wrap('', '', $position_string) if $position_string;
+    # push @usage, wrap('', '', $flag_string) if $flag_string;
 
     if (@position_specs) {
         push @usage, 'positional arguments:';
@@ -760,7 +885,7 @@ sub group_usage {
 
     $Text::Wrap::columns = $old_wrap_columns; # restore to original
 
-    return \@usage;
+    return ( \@usage, join(' ', @position_items, @flag_items, @subcommand_items) ) ;
 }
 
 sub _format_usage_by_spec {
@@ -775,7 +900,7 @@ sub _format_usage_by_spec {
 
     for my $spec ( @$specs ) {
         my $item = sprintf(
-            "%s",
+            "%s %s",
             join(', ',  @{$spec->{flags}}),
             $spec->{metavar},
         );
@@ -862,7 +987,7 @@ sub _get_option_spec {
     } else {
         # pass
         # should never be here
-        croak 'argparse: ' . 'Unknown type:' . ($spec->{type} || 'undef');
+        croak ERROR_PREFIX . 'unknown type:' . ($spec->{type} || 'undef');
     }
 
     my $repeat = '';

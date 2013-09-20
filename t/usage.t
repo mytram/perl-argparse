@@ -11,15 +11,13 @@ my $parser = Getopt::ArgParse::Parser->new(
 
 ok($parser);
 
-$parser->add_group_description(
-    submit => 'This is submit subcommand' x 6,
-);
-
-$parser->add_argument('--foo', '-f', groups => 'submit');
+$parser->add_argument('--foo', '-f');
 
 $parser->add_argument('--boo', type => 'Bool');
 
 $parser->add_argument('--nboo', type => 'Bool');
+
+$parser->add_argument('--verbose', '-v', type => 'Bool');
 
 throws_ok (
     sub { $parser->add_argument('--verbose', type => 'Count'); },
@@ -27,7 +25,7 @@ throws_ok (
     'not allow to override',
 );
 
-$parser->add_argument('--verbose', type => 'Count', groups => 'commit', reset => 1);
+$parser->add_argument('--verbose', type => 'Count', reset => 1);
 $parser->add_argument('--email', required => 1);
 
 $parser->add_argument('--email2', '--e2', required => 1);
@@ -38,11 +36,29 @@ throws_ok(
   'dest=boo is used',
 );
 
-$parser->add_argument('boo', required => 1, groups => 'post', dest => 'boo_post');
+$parser->add_argument('boo', required => 1, dest => 'boo_post');
 
 $parser->add_argument('boo2', type => 'Pair', required => 1, default => { a => 1, 3 => 90 });
 
-$parser->usage();
+
+# subcommands
+
+$parser->add_subparsers(title => 'Some subcommands', description => 'there are some subcommands');
+
+$sp = $parser->add_parser(
+    'list',
+    aliases => [qw(ls)],
+    help => 'this is the list subcommand message',
+);
+
+$sp->add_argument(
+    '--foo', '-f',
+    help => 'subcommand foo',
+);
+
+$parser->print_usage();
+
+print STDERR $_, "\n" for @{ $parser->format_command_usage('ls') };
 
 done_testing;
 
