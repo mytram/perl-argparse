@@ -177,6 +177,11 @@ sub add_parser {
 
     croak $self->error_prefix .  'incorrect number of arguments' if scalar(@_) % 2;
 
+
+    if (exists $self->{-subparsers}{-parsers}{$command}) {
+        croak $self->error_prefix . "subcommand $command already defined";
+    }
+
     my $args = { @_ };
 
     my $help = delete $args->{help} || '';

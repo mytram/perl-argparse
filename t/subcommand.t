@@ -25,6 +25,13 @@ lives_ok(
     sub { $p->add_subparsers(); },
 );
 
+throws_ok(
+    sub { $p->add_subparsers(); },
+    qr/subparsers already added/,
+    'subparsers already added',
+);
+
+
 $p = Getopt::ArgParse->new_parser();
 
 $p->add_argument(
@@ -60,10 +67,16 @@ throws_ok(
     'unknown parameters',
 );
 
-
 $listx_p = $sp->add_parser(
     'listx',
 );
+
+throws_ok(
+    sub { $pp = $p->add_parser('listx') },
+    qr /subcommand listx already defined/,
+    'subcommand listx already defined',
+);
+
 
 $list_p = $sp->add_parser(
     'list',
