@@ -7,7 +7,7 @@ use Getopt::ArgParse::Parser;
 $p = Getopt::ArgParse::Parser->new();
 ok($p, "new argparser");
 
-$p->add_argument('--foo');
+$p->add_argument('--foo', type => 'Scalar');
 
 $p->add_argument('--vv', type => 'Bool');
 $p->add_argument('-q', type => 'Bool', default => 1);
@@ -26,6 +26,17 @@ ok (!$ns->q, 'q - false');
 
 ok ($ns->no_vv, 'no_vv - true');
 ok ($ns->no_q, 'no_q - true');
+
+throws_ok(
+    sub { $n = $p->parse_args(split(' ', '--foo 100 --foo 200')); },
+    qr/foo can only have one value/,
+    'foo can only have one value',
+);
+
+lives_ok(
+    sub { $n = $p->parse_args(split(' ', '--foo 200')); },
+);
+ok ($ns->foo eq 200, '200 ok');
 
 # positional args
 $p = Getopt::ArgParse::Parser->new();

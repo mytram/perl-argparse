@@ -12,10 +12,6 @@ sub apply {
 
     $values ||= [];
 
-    if ($spec->{type} == Getopt::ArgParse::Parser::TYPE_BOOL) {
-        croak 'argparse: appending to type Bool not allowed';
-    }
-
     my $v = $namespace->get_attr( $spec->{dest} );
 
     if (defined($v) && !ref($v)) {

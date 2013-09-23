@@ -17,6 +17,10 @@ my $parser = Getopt::ArgParse->new_parser();
 
 ok($parser, 'new parser');
 
+lives_ok(
+    sub { $parser->add_argument() }
+);
+
 $parser->add_argument(
     '-foo',
 );
@@ -34,21 +38,20 @@ $parser->add_argument(
     required => 1,
 );
 
-throws_ok(
+lives_ok(
     sub {
         $ns = $parser->parse_args(split(/ /, '-foo 10 20 30 --array a --array b --array c'));
     },
-    qr/required/,
-    'required option: bool'
 );
 
+$parser->namespace(undef);
 $ns = $parser->parse_args(split(/ /, '-foo 10 20 30 -b --array a --array b --array c'));
 
 ok($ns->foo eq '10', 'default option');
 ok($ns->has_boo, 'has boo store true');
 my @values = $ns->array;
 diag(join(',', @values));
-ok( scalar(@values) eq 3, 'action append');
+ok( scalar(@values) eq 3, 'append array' );
 
 # positional args
 $p = Getopt::ArgParse->new_parser();

@@ -60,7 +60,6 @@ $emails = $ns->email;
 ok(scalar(@$emails) == 1, 'append - ref - size');
 ok($emails->[0] eq 'abc@perl.org', 'append - ref - element');
 
-
 # positional options
 $p = Getopt::ArgParse::Parser->new();
 ok($p, "new argparser");

@@ -39,15 +39,13 @@ sub apply {
 
     my $v = $values->[0];
 
-    croak 'a value is required for option: ' . $spec->{dest}
-        if defined $v && $v eq '';
-
-    croak sprintf('%s can only have one value: multiple const supplied', $spec->{dest})
-            if !defined $spec->{split}
-                && defined($spec->{const})
-                && scalar(@{ $spec->{const} }) > 1;
-
-    $v = $spec->{const}->[0] if @$values && $spec->{const};
+    # FIXME: const is not support. I am not sure if this is useful at all
+    # croak sprintf('%s can only have one value: multiple const supplied', $spec->{dest})
+    #         if !defined $spec->{split}
+    #             && defined($spec->{const})
+    #             && scalar(@{ $spec->{const} }) > 1;
+    #
+    # $v = $spec->{const}->[0] if @$values && $spec->{const};
 
     $namespace->set_attr($spec->{dest}, $v);
 }

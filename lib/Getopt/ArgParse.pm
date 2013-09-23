@@ -93,6 +93,11 @@ version 0.01
  	},
  );
 
+ # subcommands
+ $p->add_subparsers(title => 'subcommands');
+ $list_parser = $p->add_parser('list', help => 'List directory entries');
+ $list_parser->add_
+
 =head1 DESCRIPTIOIN
 
 Getopt::ArgParse, Getopt::ArgParse::Parser and related classes

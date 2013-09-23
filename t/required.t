@@ -59,7 +59,15 @@ lives_ok(
 
 ok($n->boo == 100, 'boo is 100');
 
-$p->add_argument('boo', nargs => 2);
+throws_ok(
+    sub { $p->add_argument('boo', nargs => 2); },
+    qr/not allow to override boo with different type/,
+    'not allow to override',
+);
+
+lives_ok(
+    sub { $p->add_argument('boo', nargs => 2, reset => 1); },
+);
 
 lives_ok(
     sub { $n = $p->parse_args(split(' ', '-f 10')); },
@@ -67,7 +75,7 @@ lives_ok(
 
 throws_ok(
     sub { $n = $p->parse_args(split(' ', '-f 10 111')); },
-    qr/not enough/,
+    qr/too few arguments for boo/,
     'not enough args for boo',
 );
 
@@ -92,7 +100,7 @@ throws_ok(
 
 throws_ok(
     sub { $n = $p->parse_args(split(' ', '-f 10 100')); },
-    qr/not enough/,
+    qr/too few arguments for boo/,
     'not enough args for boo',
 );
 
