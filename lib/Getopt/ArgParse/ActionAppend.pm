@@ -1,6 +1,7 @@
 package Getopt::ArgParse::ActionAppend;
 
 use strict;
+use warnings;
 use Carp;
 
 use Getopt::ArgParse::Parser;
@@ -13,10 +14,6 @@ sub apply {
     $values ||= [];
 
     my $v = $namespace->get_attr( $spec->{dest} );
-
-    if (defined($v) && !ref($v)) {
-        croak 'argparse: argument type conflict: expected Pair or Array';
-    }
 
     if ($spec->{type} == Getopt::ArgParse::Parser::TYPE_PAIR) {
         $v = {} unless defined $v;
@@ -31,7 +28,10 @@ sub apply {
         push @$v, @$values;
     }
 
+
     $namespace->set_attr( $spec->{dest}, $v );
+
+    return '';
 }
 
 1;

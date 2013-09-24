@@ -1,3 +1,5 @@
+
+use lib "../lib";
 use lib "lib";
 use Test::More; # tests => 4;
 use Test::Exception;

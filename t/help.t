@@ -6,6 +6,7 @@ use Getopt::ArgParse;
 
 $p = Getopt::ArgParse->new_parser(
     prog => 'mysvn',
+    epilog => 'copyright me',
     error_prefix => 'mysvn:error: ',
 );
 

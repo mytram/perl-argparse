@@ -12,8 +12,10 @@ sub apply {
     my ($spec, $namespace, $values) = @_;
     $values ||= [];
 
-    croak sprintf('%s can only have one value', $spec->{dest})
-        if @$values > 1;
+    return sprintf(
+        '%s can only have one value',
+        $spec->{dest},
+    ) if @$values > 1;
 
     if ($spec->{type} == Getopt::ArgParse::Parser::TYPE_BOOL) {
         # If there is default true or false
@@ -48,6 +50,8 @@ sub apply {
     # $v = $spec->{const}->[0] if @$values && $spec->{const};
 
     $namespace->set_attr($spec->{dest}, $v);
+
+    return '';
 }
 
 1;

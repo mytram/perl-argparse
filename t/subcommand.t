@@ -1,6 +1,7 @@
 use Test::More;
 use Test::Exception;
 
+use lib '../lib';
 use lib 'lib';
 
 use Getopt::ArgParse;
@@ -67,14 +68,39 @@ throws_ok(
     'unknown parameters',
 );
 
-$listx_p = $sp->add_parser(
-    'listx',
+$sp->add_parser(
+    'listx', aliases => [ qw(lx) ],
 );
 
 throws_ok(
     sub { $pp = $p->add_parser('listx') },
     qr /subcommand listx already defined/,
     'subcommand listx already defined',
+);
+
+
+throws_ok(
+    sub {
+        $pp = $sp->add_parser(
+            'list',
+            aliases => qw(ls) ,
+            help => 'This is the list subcommand',
+        );
+    },
+    qr/aliases is not an arrayref/,
+    'aliases is not an arrayref',
+);
+
+throws_ok(
+    sub {
+        $pp = $sp->add_parser(
+            'list',
+            aliases => [ qw(ls lx) ],
+            help => 'This is the list subcommand',
+        );
+    },
+    qr/alias=lx already used/,
+    'alias already used'
 );
 
 
@@ -105,9 +131,6 @@ throws_ok(
     'unknown option',
 );
 
-# $n = $p->parse_args(split(' ', '-h list'));
-# ok($n->help);
-
 throws_ok(
     sub {
         $n = $p->parse_args(split(' ', 'list2 --foo'));
@@ -124,8 +147,6 @@ lives_ok(
 
 ok($n->foo, "list's foo is true");
 ok($n->boo, "list's boo is true");
-
-# ok ($n->foo, 'xoo is true');
 
 done_testing;
 

@@ -38,6 +38,14 @@ $parser->add_argument(
     required => 1,
 );
 
+throws_ok(
+    sub {
+        $parser->add_argument('-a', 'b');
+    },
+    qr/incorrect number of arguments/,
+    'incorrect number of arguments',
+);
+
 lives_ok(
     sub {
         $ns = $parser->parse_args(split(/ /, '-foo 10 20 30 --array a --array b --array c'));
@@ -62,6 +70,19 @@ $p->add_argument(
 $ns = $p->parse_args(split(/ /, 'submit hello'));
 
 ok($ns->command eq 'submit', 'simple position');
+
+throws_ok(
+    sub {
+        $p->add_argument(
+            'command2',
+            type => 'Array2',
+            nargs => 2,
+        );
+    },
+    qr/unknown type/,
+    'unknown type',
+);
+
 
 $p->add_argument(
     'command2',

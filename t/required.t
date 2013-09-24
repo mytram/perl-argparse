@@ -81,14 +81,7 @@ throws_ok(
 
 $p->add_argument('boo', type => 'Array', nargs => 2, required => 1);
 
-# boo is preloaded with 100 in namespace. this will let the parsing
-# pass
-throws_ok(
-    sub { $n = $p->parse_args(split(' ', '-f 10')); },
-    qr/type conflict/,
-    'type conflict: try to append to Scalar'
-);
-
+# $n = $p->parse_args(split(' ', '-f 10'));
 $n->set_attr('boo', undef);
 
 # Now it will fail for it's required
