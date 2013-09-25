@@ -25,7 +25,18 @@ sub new_parser {
 =head1 NAME
 
 Getopt::ArgParse - Parsing command line arguments with a user-friendly
-interface, similar to python's argpare but with perlish extras
+interface, similar to python's argpare but with perlish extras.
+
+In particular, the modules provides the following features:
+
+  - generating usage messages
+  - storing parsed arg values in an object, which can be also used to
+    load configuration values from files and therefore the ability for
+    applications to combine configurations in a single interface
+  - A more user-friendly interface to specify arguments, such as
+    argument types, argument values split, etc.
+  - Subcommand parsing, such svn <command>
+  - Supporting both flag based optional arguments and positional arguments
 
 =head1 VERSION
 
@@ -108,10 +119,6 @@ version 0.01
    ],
  );
 
- #
-
- 
-
 =head1 DESCRIPTIOIN
 
 Getopt::ArgParse, Getopt::ArgParse::Parser and related classes
@@ -140,7 +147,10 @@ Getopt::ArgParse::Parser is a Moo class.
 Getopt::ArgParse->new_parser( ...) or Getopt::ArgParse::Parser->new( ... )
 
 The former calls Getopt::ArgParser::Parser->new to create a parser
-object.  The parser constructor accepts the following parameters.
+object. The parser constructor accepts the following parameters.
+
+All parsers are created with a predefined Bool option --help|-h. The
+program can choose to reset it, though.
 
 =over 8
 
@@ -148,9 +158,13 @@ object.  The parser constructor accepts the following parameters.
 
 The program's name. Default $0.
 
+=item * help
+
+A short description of the program.
+
 =item * description
 
-A description of the program.
+A long description of the program.
 
 =item * namespace
 
@@ -163,17 +177,30 @@ e.g. $parser->namespace->boo. See also Getopt::ArgParse::Namespace
 
 The Getopt::Long configurations. See also Getopt::Long
 
-=item * parent
+=item * parents
 
-Another parser, whose argument specifications the new parse will
-inherit.
+Parent parsents, whose argument and subparser specifications the new
+parser will copy. See copy() below
+
+=item * error_prefix
+
+Customize the message prefixed to error messages thrown by
+Getop::ArgParse, default to 'Getopt::ArgParse: '
+
+=item * print_usage_if_help
+
+Set this to false to not display usage messages even if --help is on
+or the subcommand help is called. The default behavior is to display
+usage messages if help is set.
 
 =back
 
-=head3 add_argument( ... )
+=head3 add_argument( ... ) and add_arguments( ... )
 
 This object method defines the specfication of an argument. It accepts
 the following parameters.
+
+add_arguments() is to add multiple multiple arguments at the same time
 
 =over 8
 
@@ -272,7 +299,8 @@ Only one value is allowed for scalar argument types: Scalar, Count, and Bool.
 
 =item * required
 
-Whether or not the command-line option may be omitted (optionals only).
+Whether or not the command-line option may be omitted (optionals
+only). This has no effect on types 'Bool' and 'Count'
 
 =item * help
 
@@ -282,12 +310,10 @@ A brief description of what the argument does.
 
 A name for the argument in usage messages.
 
-=item * groups
+=item * reset
 
-Specify which option groups the current option belongs to. Usage
-messages will be grouped together.
-
-By default, an option is put under an unnamed group.
+Set reset to override the existing definition of an option. This will
+clear the value in the namspace as well.
 
 =cut
 
@@ -325,8 +351,7 @@ This object method accepts a list of arguments or @ARGV if
 unspecified, parses them for values, and stores the values in the
 namespace object.
 
-It displays a generated usage message if both @ARGV and argument list
-are empty.
+It does NOT display usage messages if the argument list is empty.
 
 =head4 Parsing for Positional Arguments
 
@@ -351,16 +376,107 @@ values to a namespace from conf files before parsing the command line.
 Call this after parse_args() is invoked to get the unconsumed
 arguments.
 
+=head2 Subcommand Support
+
+Call add_subparsers() first to initialize the current parser for
+subcommand support. A help subcommand is created as part of the
+initialization. The help subcommand has the following options:
+
+=over 4
+
+positional arguments:
+     COMMAND      ? Show the usage for this command
+optional arguments:
+    --help, -h     ? show this help message and exit
+    --all, -a      ? Show the full usage
+
+=back
+
+Call add_parser() to add a subparser for each subcommand. Use the
+parser object returned by add_parser() to add the options to the
+subcommand.
+
+Once subcommand support is on, if the first argument is not a flag,
+i.e. starting with a dash '-', the parser's parse_args() will treat it
+as a subcommand. Otherwise, the parser parses for the defined
+arguments.
+
+The namespace's current_command() will contain the subcommand after
+parsing successfully.
+
+Unlike arguments, subparsers cannot be reset.
+
+=head3 add_subparsers( ... )
+
+add_subparses must be called to initialize subcommand support.
+
+=over 8
+
+=item * title
+
+A title message to mark the beginning of subcommand usage in the usage
+message
+
+=item * description
+
+A general description appearing about the title
+
+=back
+
+=head3 add_parse( ... )
+
+=over 8
+
+=item * help
+
+A short description of the subcommand.
+
+=item * description
+
+A long description of the subcommand.
+
+=back
+
+=head2 Copying Parsers
+
+A parser can copy argument specification or subcommand specifciation
+for existing parsers. A use case for this is that the program wants all
+subcommands to have a command set of arguments.
+
+=head3 copy_args($parent)
+
+Copy argument specification from the $parent parser
+
+=head3 copy_parsers($parent)
+
+Copy parser specification for subcommands from the $parent parser
+
+=head3 copy($parent)
+
+Copy both.
+
 =head2 Usage Messages and Related Methods
 
-Call usage() to retrieve a full usage message or call group_usage() to
-customize usage messages at a finer level.
+=head3 format_usage()
 
-=head3 group_usage( [$group] )
+Return the formated usage message for the whole program in an array
+reference.
 
-Return the usage messages for the $group group. If $group is not
-given, it returns the usage messages for the default group.
+=head3 print_usage()
 
+Print the usage mesage returned by format_usage().
+
+=head3 format_command_usage($command)
+
+Return the formated usage message for the command in an array
+reference.
+
+=head3 print_command_usage([$command])
+
+Print the usage message returned by format_command_usage(). If
+$command is not given, it will first try to use
+$self->namespace->help_command, which will be present for the help
+subcommand, and then $self->namespace->current_command.
 
 =head3
 
