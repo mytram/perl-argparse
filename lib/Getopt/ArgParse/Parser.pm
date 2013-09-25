@@ -924,7 +924,7 @@ sub print_usage {
 
 sub print_command_usage {
     my $self = shift;
-    my $command = shift || $self->namespace->help_command; # running help command
+    my $command = shift || $self->namespace->help_command || $self->namespace->current_command; # running help command
     my $usage = $self->format_command_usage($command);
     if ($usage) {
         print STDERR $_, "\n" for @$usage;
