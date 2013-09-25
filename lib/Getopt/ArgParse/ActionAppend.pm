@@ -11,8 +11,6 @@ sub apply {
 
     my ($spec, $namespace, $values) = @_;
 
-    $values ||= [];
-
     my $v = $namespace->get_attr( $spec->{dest} );
 
     if ($spec->{type} == Getopt::ArgParse::Parser::TYPE_PAIR) {
@@ -27,7 +25,6 @@ sub apply {
         $v = [] unless defined $v;
         push @$v, @$values;
     }
-
 
     $namespace->set_attr( $spec->{dest}, $v );
 

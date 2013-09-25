@@ -21,7 +21,7 @@ $parser->add_argument('--verbose', '-v', type => 'Bool');
 
 throws_ok (
     sub { $parser->add_argument('--verbose', type => 'Count'); },
-    qr/not allow/,
+    qr/redefine option verbose without reset/,
     'not allow to override',
 );
 
@@ -49,6 +49,39 @@ $sp = $parser->add_parser(
     'list',
     aliases => [qw(ls)],
     help => 'this is the list subcommand message',
+    description =><<'EOS',
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum ac
+diam iaculis, consectetur nunc sit amet, vulputate lacus. Suspendisse
+vitae felis nisl. Sed posuere aliquet placerat. Nunc eget sollicitudin
+eros, quis porta nunc. Mauris laoreet lacinia aliquet. Cras porttitor
+erat ac elit semper blandit. Vestibulum porttitor nulla id nisl
+eleifend venenatis. In hac habitasse platea dictumst. Cras ut leo
+rhoncus, bibendum lectus at, hendrerit tortor. Etiam congue ligula
+magna, nec malesuada lorem semper ac.
+
+Sed luctus malesuada felis, in mollis lectus aliquam ut. Ut adipiscing
+massa id felis interdum semper sit amet in leo. Morbi imperdiet
+fringilla sodales. Donec at ipsum eu lorem lacinia pharetra eu non
+quam. Duis a porttitor nulla. In hac habitasse platea dictumst. Aenean
+hendrerit sit amet quam nec malesuada. Vivamus lobortis placerat diam,
+a lobortis ante sollicitudin vel. Cras ullamcorper enim urna, non
+dignissim velit iaculis id. Sed odio libero, hendrerit sed blandit
+eget, luctus ut velit. Suspendisse lobortis ullamcorper magna at
+tincidunt. In hac habitasse platea dictumst. Curabitur accumsan, massa
+vitae rutrum euismod, quam purus ultrices lectus, sed sodales metus
+sem sed nulla. Vestibulum tincidunt ligula eget enim pulvinar, non
+condimentum turpis dignissim. Maecenas sed nulla eu lorem dictum
+semper. Nulla fringilla egestas nibh vitae blandit.
+
+In vitae arcu accumsan turpis commodo varius. Pellentesque id massa
+ligula. Vestibulum pharetra, metus in semper rutrum, odio urna
+vulputate magna, nec tristique sem arcu sit amet dui. Suspendisse nec
+risus consequat, rhoncus tellus vitae, tincidunt augue. Suspendisse
+cursus felis nulla, non luctus lorem pharetra quis. Nunc pulvinar
+lectus enim, sit amet interdum felis ultrices vel. Vestibulum neque
+metus, condimentum eget convallis nec, euismod vitae nunc. Proin
+sagittis ullamcorper risus, vel rutrum turpis posuere eu.
+EOS
 );
 
 $sp->add_argument(

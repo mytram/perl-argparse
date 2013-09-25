@@ -31,7 +31,7 @@ $n = $p->parse_args(split(' ', '-c -c -c'));
 
 ok($n->count == 6, 'count again now is 6');
 
-$p->add_argument('--count', '-c', type => 'Count', default => 3);
+$p->add_argument('--count', '-c', type => 'Count', default => 3, reset => 1);
 
 $n->set_attr('count', undef);
 

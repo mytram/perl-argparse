@@ -77,7 +77,6 @@ sub AUTOLOAD {
             return wantarray ? @$values : $values;
         } elsif (ref($values) eq 'HASH') {
             return wantarray ? %$values : $values;
-
         } else {
             return $values;
         }

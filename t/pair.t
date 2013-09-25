@@ -45,7 +45,14 @@ ok($n->params->{c} eq '2', 'c=2');
 
 $p->namespace(undef);
 
-$p->add_argument('params', type => 'Pair', nargs => '?', default => { a => 10 });
+throws_ok(
+    sub { $p->add_argument('params', type => 'Pair', nargs => '?', default => { a => 10 }); },
+    qr/redefine option params without reset/,
+    'redefine option with reset',
+);
+lives_ok(
+    sub { $p->add_argument('params', type => 'Pair', nargs => '?', default => { a => 10 }, reset => 1); },
+);
 
 lives_ok (
     sub { $n = $p->parse_args('list') }

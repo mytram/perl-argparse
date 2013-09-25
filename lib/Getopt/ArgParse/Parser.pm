@@ -56,6 +56,8 @@ my %Type2ConstMap = (
 has prog => ( is => 'rw', required => 1, default => sub { $0 }, );
 
 #
+has help => ( is => 'rw', required => 1, default => sub { '' }, );
+
 has description => ( is => 'rw', required => 1, default => sub { '' }, );
 
 #
@@ -77,30 +79,36 @@ has namespace => (
 );
 
 # parent - Readonly
-
-has parent => (
+has parents => (
     is => 'ro',
-       isa => sub {
-           my $parent_class = blessed $_[0];
-        die 'parent is not a Getopt::ArgParse::Parser'
-            unless $parent_class && $parent_class->isa(__PACKAGE__);
+    isa => sub {
+        my $parents = shift;
+        for my $parent (@$parents) {
+            my $parent_class = blessed $parent;
+            die 'parent is not a Getopt::ArgParse::Parser'
+                unless $parent_class && $parent_class->isa(__PACKAGE__);
+        }
     },
-    required => 0,
+    default => sub { [] },
 );
 
 # parser_configs - Read/write
 
 # The configurations that will be passed to Getopt::Long::Configure(
 # $self->parser_configs ) when parse_args is invoked.
-
 has parser_configs => ( is => 'rw', required => 1, default => sub { [] }, );
 
-
-# The current subcommand
-has command => ( is => 'rw');
+# Behavioural properties
+#
+# Print usage message if help is no, by default. Turn this off by
+# setting this to a false value
+has print_usage_if_help => (is => 'ro', default => 1);
 
 # internal properties
 has _option_position => ( is => 'rw', required => 1, default => sub { 0 } );
+
+# The current subcommand
+has _command => ( is => 'rw');
 
 sub BUILD {
     my $self = shift;
@@ -110,14 +118,52 @@ sub BUILD {
 
     $self->add_argument(
         '--help', '-h',
-        type => 'Bool',
-        dest => 'help',
-        help => 'show this help message and exit',
+        type  => 'Bool',
+        dest  => 'help',
+        help  => 'show this help message and exit',
+        reset => 1,
     );
 
     # merge
-    if ($self->parent) {
-        $self->add_arguments( @ { $self->parent->{-pristine_add_arguments} || [] } );
+    for my $parent (@{$self->parents}) {
+        $self->copy($parent);
+    }
+}
+
+sub copy {
+    my $self = shift;
+    my $parent = shift;
+
+    $self->copy_args($parent);
+    $self->copy_parsers($parent);
+}
+
+sub copy_args {
+    my $self = shift;
+    my $parent = shift;
+
+    $self->add_arguments( @{ $parent->{-pristine_add_arguments} } );
+
+    return unless $parent;
+}
+
+sub copy_parsers {
+    my $self = shift;
+    my $parent = shift;
+
+    return unless $parent;
+
+    if (exists $parent->{-subparsers}) {
+        $self->add_subparsers(
+            @{$parent->{-pristine_add_subparsers}->[0]}
+        );
+
+        for my $args (@{$parent->{-pristine_add_parser}}) {
+            my $command = $args->[0];
+            next if $command eq 'help';
+            my $sp = $self->add_parser(@$args);
+            $sp->copy($parent->{-subparsers}{-parsers}{$command});
+        }
     }
 }
 
@@ -126,6 +172,8 @@ sub BUILD {
 #
 sub add_subparsers {
     my $self = shift;
+
+    push @{$self->{-pristine_add_subparsers}}, [ @_ ];
 
     croak $self->error_prefix .  'incorrect number of arguments' if scalar(@_) % 2;
 
@@ -153,14 +201,18 @@ sub add_subparsers {
         help => 'display help information about ' . $self->prog,
     );
 
-    $hp->add_argument(
-        '--all', '-a',
-        type => 'Bool',
-    );
-
-    $hp->add_argument(
-        'command',
-        nargs => 1,
+    $hp->add_arguments(
+        [
+            '--all', '-a',
+            help => 'Show the full usage',
+            type => 'Bool',
+        ],
+        [
+            'command',
+            help  => 'Show the usage for this command',
+            dest  => 'help_command',
+            nargs => 1,
+        ],
     );
 
     return $self;
@@ -169,6 +221,9 @@ sub add_subparsers {
 # $command, alias => [], help => ''
 sub add_parser {
     my $self = shift;
+
+    push @{ $self->{-pristine_add_parser} }, [ @_ ];
+
     croak $self->error_prefix . 'add_subparsers() is not called first' unless $self->{-subparsers};
 
     my $command = shift;
@@ -177,15 +232,16 @@ sub add_parser {
 
     croak $self->error_prefix .  'incorrect number of arguments' if scalar(@_) % 2;
 
-
     if (exists $self->{-subparsers}{-parsers}{$command}) {
         croak $self->error_prefix . "subcommand $command already defined";
     }
 
     my $args = { @_ };
 
-    my $help = delete $args->{help} || '';
+    my $help    = delete $args->{help} || '';
+    my $description  = delete $args->{description} || '';
     my $aliases = delete $args->{aliases} || [];
+
     croak $self->error_prefix . 'aliases is not an arrayref'
         if ref($aliases) ne 'ARRAY';
 
@@ -198,7 +254,9 @@ sub add_parser {
 
     for my $alias ($command, @$aliases) {
         if (exists $self->{-subparsers}{-alias_map}{$alias}) {
-            croak $self->error_prefix . "alias=$alias already used by command=" . $self->{-subparsers}{-alias_map}{$alias};
+            croak $self->error_prefix
+                . "alias=$alias already used by command="
+                . $self->{-subparsers}{-alias_map}{$alias};
         }
     }
 
@@ -210,8 +268,11 @@ sub add_parser {
     }
 
     return $self->{-subparsers}{-parsers}{$command} = __PACKAGE__->new(
-        prog        => $prog,
-        description => $help,
+        prog                => $prog,
+        help                => $help,
+        description         => $description,
+        error_prefix        => $self->error_prefix,
+        print_usage_if_help => $self->print_usage_if_help,
     );
 }
 
@@ -229,7 +290,6 @@ sub add_argument {
     my $self = shift;
 
     return unless @_; # mostly harmless
-
     #
     # FIXME: This is for merginng parent parents This is a dirty hack
     # and should be done properly by merging internal specs
@@ -346,6 +406,10 @@ sub add_argument {
     ################
     my $required = delete $args->{required} || '';
 
+    if ($type == TYPE_BOOL || $type == TYPE_COUNT) {
+        $required = ''; # TYPE_BOOL and TYPE_COUNT will already have default values
+    }
+
     ################
     # help
     ################
@@ -377,11 +441,11 @@ sub add_argument {
         }
 
         if (exists $self->{-position_specs}{$dest}) {
-            croak $self->error_prefix . "dest=$dest already used by a positional argument";
+            croak $self->error_prefix . "option dest=$dest already used by a positional argument";
         }
     } else {
         if (exists $self->{-option_specs}{$dest}) {
-            croak $self->error_prefix . "dest=$dest already used by an optional argument";
+            croak $self->error_prefix . "option dest=$dest already used by an optional argument";
         }
     }
 
@@ -437,15 +501,14 @@ sub add_argument {
     }
 
     croak $self->error_prefix . sprintf(
-        'unknown spec parameters: %s',
+        'unknown spec: %s',
         join(',', keys %$args)
     ) if keys %$args;
 
     # type check
-    if (exists $specs->{$spec->{dest}}{type}
-            && $specs->{$spec->{dest}}{type} != $spec->{type}) {
+    if (exists $specs->{$spec->{dest}}) {
         croak $self->error_prefix . sprintf(
-            'not allow to override %s with different type',
+            'redefine option %s without reset',
             $spec->{dest},
         );
     }
@@ -512,29 +575,27 @@ sub parse_args {
     my $parsed_subcmd;
     # If the first argument is a subcommnd, it will parse as a subcommand
     if (exists $self->{-subparsers} && defined($argv[0]) && substr($argv[0], 0, 1) ne '-') {
+        # Subcommand must appear as the first argument
+        # or it will parse as the top command
         my $cmd = shift @argv;
         my $subparser = $self->_get_subcommand_parser($cmd);
         croak $self->error_prefix . sprintf("%s is not a %s command. See help", $cmd, $self->prog)
             unless $subparser;
 
-        my $error;
-        ($parsed_subcmd, $error) = $self->_parse_subcommand($cmd => $subparser);
-        croak $self->error_prefix . $error if $error;
-
-        $self->namespace->set_attr(subcommand => $self->command);
+        $parsed_subcmd = $self->_parse_subcommand($cmd => $subparser);
     }
 
     if (!$parsed_subcmd) {
         $self->_parse_optional_args(\@option_specs) if @option_specs;
         $self->_parse_positional_args(\@position_specs) if @position_specs;
 
-        if ($self->namespace->get_attr('help')) {
+        if ($self->print_usage_if_help() && $self->namespace->get_attr('help')) {
             $self->print_usage();
             exit(0);
         }
     } else {
-        if ($self->command() eq 'help') {
-            if ($self->namespace->command) {
+        if ($self->print_usage_if_help() && $self->_command() eq 'help') {
+            if ($self->namespace->help_command) {
                 $self->print_command_usage();
                 exit(0);
             } else {
@@ -543,6 +604,8 @@ sub parse_args {
             }
         }
     }
+
+    $self->namespace->set_attr(current_command => $self->_command) if $self->_command;
 
     return $self->namespace;
 }
@@ -558,7 +621,7 @@ sub _get_subcommand_parser {
 
     return unless $command;
 
-    $self->command($command);
+    $self->_command($command);
     # The subcommand parser must exist if the alias is mapped
     return $self->{-subparsers}{-parsers}{$command};
 }
@@ -567,15 +630,12 @@ sub _parse_subcommand {
     my $self = shift;
     my ($cmd, $subparser) = @_;
 
-    # Subcommand must appear as the first argument
-    # or it will parse as the top command
-
     $subparser->namespace($self->namespace);
-    $subparser->parse_args( @{$self->{-argv}} );
+    $subparser->parse_args(@{$self->{-argv}});
 
     $self->{-argv} = $subparser->{-argv};
 
-    return (1, '');
+    return 1;
 }
 
 #
@@ -626,23 +686,11 @@ sub _parse_optional_args {
 
     Getopt::Long::Configure('default');
 
-    my $error = $self->_post_parse_processing( $specs, $options, $dest2spec );
+    $self->_post_parse_processing($specs, $options, $dest2spec);
 
-    croak $self->error_prefix .  $error if $error;
+    $self->_apply_action($specs, $options, $dest2spec);
 
-    if (my $error = $self->_apply_action($specs, $options, $dest2spec)) {
-        croak $self->error_prefix . $error;
-    }
-
-
-    if (!$self->namespace->get_attr('help')) {
-        for my $spec (@$specs) {
-            croak $self->error_prefix . sprintf('%s is required', $spec->{dest}),
-                if $spec->{required}
-                    && ($spec->{type} != TYPE_BOOL && $spec->{type} != TYPE_COUNT)
-                    && ! defined $self->namespace->get_attr($spec->{dest});
-        }
-    }
+    $self->_post_apply_processing($specs, $options, $dest2spec);
 }
 
 sub _parse_positional_args {
@@ -698,22 +746,11 @@ sub _parse_positional_args {
         }
     }
 
-    if (my $error = $self->_post_parse_processing($specs, $options, $dest2spec)) {
-        croak $self->error_prefix .  $error;
-    }
+    $self->_post_parse_processing($specs, $options, $dest2spec);
 
-    if (my $error = $self->_apply_action($specs, $options, $dest2spec)) {
-        croak $self->error_prefix . $error;
-    }
+    $self->_apply_action($specs, $options, $dest2spec);
 
-    if (!$self->namespace->get_attr('help')) {
-        for my $spec (@$specs) {
-            croak $self->error_prefix . sprintf('%s is required', $spec->{dest}),
-                if $spec->{required}
-                    && ($spec->{type} != TYPE_BOOL && $spec->{type} != TYPE_COUNT)
-                    && !defined  $self->namespace->get_attr($spec->{dest});
-        }
-    }
+    $self->_post_apply_processing($specs, $options, $dest2spec);
 }
 
 #
@@ -722,8 +759,6 @@ sub _post_parse_processing {
     my ($option_specs, $options, $dest2spec) = @_;
 
     #
-    my $is_help = $options->{ $dest2spec->{help} } if $dest2spec->{help};
-
     for my $spec ( @$option_specs ) {
         my $values = $options->{ $dest2spec->{$spec->{dest}} };
 
@@ -779,7 +814,6 @@ sub _post_parse_processing {
 
         # choices
         if ( $spec->{choices} ) {
-
             if (ref($spec->{choices}) eq 'CODE') {
                 for my $v (@$values) {
                     $spec->{choices}->($v);
@@ -794,7 +828,7 @@ sub _post_parse_processing {
                     my $k = defined($v) ? $v : '_undef';
                     next VALUE if exists $choices{$k};
 
-                    return sprintf(
+                    croak $self->error_prefix . sprintf(
                         "option %s value %s not in allowed choices: [ %s ]",
                         $spec->{dest}, $v, join( ', ', @{ $spec->{choices} } ),
                     );
@@ -812,7 +846,7 @@ sub _post_parse_processing {
                 my $k = defined($v) ? uc($v) : '_undef';
                 next VALUE if exists $choices{$k};
 
-                return sprintf(
+                croak $self->error_prefix . sprintf(
                     "option %s value %s not in allowed choices: [ %s ] (case insensitive)",
                     $spec->{dest}, $v, join( ', ', @{ $spec->{choices_i} } ),
                 );
@@ -846,10 +880,37 @@ sub _apply_action {
             $spec->{name},
         );
 
-        return $error if $error;
+        croak $self->error_prefix . $error if $error;
     }
 
     return '';
+}
+
+sub _post_apply_processing {
+    my $self = shift;
+    my ($specs, $options, $dest2spec) = @_;
+
+    #
+    # required is checked after applying actions
+    # This is because required checking is bypassed if help is on
+    #
+    for my $spec (@$specs) {
+        my $v = $self->namespace->get_attr($spec->{dest});
+
+        # required
+        if ( $spec->{required} && not $self->namespace->get_attr('help') ) {
+            my $has_v;
+            if ($spec->{type} == TYPE_ARRAY) {
+                $has_v = @$v;
+            } elsif ($spec->{type} == TYPE_PAIR) {
+                $has_v = scalar(keys %$v);
+            } else {
+                $has_v = defined $v;
+            }
+
+            croak $self->error_prefix . sprintf('option %s is required', $spec->{dest}) unless $has_v;
+        }
+    }
 }
 
 #
@@ -863,13 +924,14 @@ sub print_usage {
 
 sub print_command_usage {
     my $self = shift;
-    my $usage = $self->format_command_usage($self->namespace->command);
+    my $command = shift || $self->namespace->help_command; # running help command
+    my $usage = $self->format_command_usage($command);
     if ($usage) {
         print STDERR $_, "\n" for @$usage;
     } else {
         print STDERR
             $self->error_prefix,
-            sprintf('No help for %s. See help', $self->namespace->get_attr('command')),
+            sprintf('No help for %s. See help', $self->namespace->help_command),
             "\n";
     }
 }
@@ -883,7 +945,7 @@ sub format_usage {
 
     my @usage;
 
-    push @usage, wrap('', '', $self->prog. ': ' . $self->description);
+    push @usage, wrap('', '', $self->prog. ': ' . $self->help);
 
     my ($help, $option_string) =  $self->_format_group_usage();
     $Text::Wrap::columns = 80;
@@ -895,33 +957,50 @@ sub format_usage {
 
     push @usage, wrap('', '', $header);
 
+    if ($self->description) {
+        my @lines = split("\n", $self->description);
+
+        my @paragraphs;
+
+        my $para = '';
+        for my $line (@lines) {
+            if ($line =~ /^\s*$/) {
+                push @paragraphs, $para;
+                $para = '';
+            } else {
+                $para .= ( $para ? ' ' : '' ) . $line;
+            }
+        }
+
+        push @paragraphs, $para;
+        for (@paragraphs) {
+            push @usage, '';
+            push @usage, wrap('', '', $_);
+        }
+    }
+
     push @usage, '';
 
     push @usage, @$help;
 
     if (exists $self->{-subparsers}) {
+        push @usage, '';
         push @usage, wrap('', '', $self->{-subparsers}{-title});
         push @usage, wrap('', '', $self->{-subparsers}{-description}) if $self->{-subparsers}{-description};
 
         for my $command ( sort keys  %{$self->{-subparsers}{-parsers}} ) {
             my $parser = $self->{-subparsers}{-parsers}{$command};
-            #
-            # FIXME - folding description
-            #
             my $tab_head = ' ' x ( 12 + 2 );
-            my @desc = split("\n", wrap('', '', $parser->description));
+            my @desc = split("\n", wrap('', '', $parser->help));
             my $desc = (shift @desc) || '';
             $_ = $tab_head . $_ for @desc;
             push @usage, sprintf('  %-12s%s', $parser->prog, join("\n", $desc, @desc));
         }
     }
 
-    push @usage, '';
-    push @usage, wrap('', '', $self->epilog) if $self->epilog;
+    push @usage, '', wrap('', '', $self->epilog) if $self->epilog;
 
     $Text::Wrap::columns = $old_wrap_columns; # restore to original
-
-    push @usage, '';
 
     return \@usage;
 }
@@ -1010,7 +1089,7 @@ sub _format_group_usage {
         push @usage, @{ $self->_format_usage_by_spec(\@option_specs) };
     }
 
-    push @usage, '';
+    # push @usage, '';
 
     $Text::Wrap::columns = $old_wrap_columns; # restore to original
 
@@ -1036,7 +1115,7 @@ sub _format_usage_by_spec {
         my $len = length($item);
         $max = $len if $len > $max;
 
-        # flatterning default
+        # generate default string
         my $default = '';
         my $values = [];
 
@@ -1053,13 +1132,32 @@ sub _format_usage_by_spec {
         }
 
         if (@$values) {
-            $default = 'Default: ' . join(',', @$values);
+            $default = 'Default: ' . join(', ', @$values);
+        }
+
+        # generate choice string
+        my $choices;
+        my $case = '';
+
+        if ($spec->{choices} && ref $spec->{choices} ne 'CODE') {
+            $choices = $spec->{choices};
+            $case = 'case sensitive';
+        } elsif ($spec->{choices_i}) {
+            $choices = $spec->{choices_i};
+            $case = 'case insensitive';
+        } else {
+            $choices = undef;
+        }
+
+        my $choice_str = '';
+        if ($choices) {
+            $choice_str = 'Choices: [' . join(', ', @$choices) . '], ' . $case . "\n";
         }
 
         push @item_help, [
             $item,
             ($spec->{required} ? ' ' : '?'),
-            join("\n", ($spec->{help} || 'This is option ' . $spec->{dest}), $default),
+            join("\n", ($spec->{help} || 'This is option ' . $spec->{dest}), $choice_str . $default),
         ];
     }
 

@@ -96,7 +96,21 @@ version 0.01
  # subcommands
  $p->add_subparsers(title => 'subcommands');
  $list_parser = $p->add_parser('list', help => 'List directory entries');
- $list_parser->add_
+ $list_parser->add_arguments(
+   [
+     '--verbose', '-v',
+      type => 'Count',
+      help => 'Verbosity',
+   ],
+   [
+     '--depth',
+      help => 'depth',
+   ],
+ );
+
+ #
+
+ 
 
 =head1 DESCRIPTIOIN
 
