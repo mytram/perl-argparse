@@ -320,6 +320,7 @@ sub add_argument {
     ################
     my $type_name = delete $args->{type} || 'Scalar';
     my $type = $Type2ConstMap{$type_name} if exists $Type2ConstMap{$type_name};
+    croak $self->error_prefix . "unknown type=$type_name" unless defined $type;
 
     my $nargs = delete $args->{nargs};
 
@@ -334,8 +335,6 @@ sub add_argument {
             $type = TYPE_ARRAY;
         }
     }
-
-    croak $self->error_prefix . "unknown type=$type_name" unless defined $type;
 
     if ($type == TYPE_COUNT) {
         $args->{action} = '_count' unless defined $args->{action};
