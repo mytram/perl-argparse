@@ -161,8 +161,10 @@ sub copy_parsers {
         for my $args (@{$parent->{-pristine_add_parser}}) {
             my $command = $args->[0];
             next if $command eq 'help';
-            my $sp = $self->add_parser(@$args);
-            $sp->copy($parent->{-subparsers}{-parsers}{$command});
+            $self->add_parser(
+                @$args,
+               parents => [ $parent->{-subparsers}{-parsers}{$command} ],
+            );
         }
     }
 }
@@ -179,7 +181,7 @@ sub add_subparsers {
 
     my $args = { @_ };
 
-    my $title = (delete $args->{title} || 'Subcommands') . ':';
+    my $title       = (delete $args->{title} || 'Subcommands') . ':';
     my $description = delete $args->{description} || '';
 
     croak $self->error_prefix . sprintf(
@@ -193,7 +195,6 @@ sub add_subparsers {
 
     $self->{-subparsers}{-title} = $title;
     $self->{-subparsers}{-description} = $description;
-
     $self->{-subparsers}{-alias_map} = {};
 
     my $hp = $self->add_parser(
@@ -222,8 +223,6 @@ sub add_subparsers {
 sub add_parser {
     my $self = shift;
 
-    push @{ $self->{-pristine_add_parser} }, [ @_ ];
-
     croak $self->error_prefix . 'add_subparsers() is not called first' unless $self->{-subparsers};
 
     my $command = shift;
@@ -238,9 +237,14 @@ sub add_parser {
 
     my $args = { @_ };
 
-    my $help    = delete $args->{help} || '';
-    my $description  = delete $args->{description} || '';
-    my $aliases = delete $args->{aliases} || [];
+    my $parents = delete $args->{parents} || [];
+    push @{ $self->{-pristine_add_parser} }, [ $command, %$args ];
+
+    croak $self->error_prefix . 'add_subparsers() is not called first' unless $self->{-subparsers};
+
+    my $help        = delete $args->{help} || '';
+    my $description = delete $args->{description} || '';
+    my $aliases     = delete $args->{aliases} || [];
 
     croak $self->error_prefix . 'aliases is not an arrayref'
         if ref($aliases) ne 'ARRAY';
@@ -263,13 +267,14 @@ sub add_parser {
     $self->{-subparsers}{-alias_map}{$_} = $command for ($command, @$aliases);
 
     my $prog = $command;
-    if (@$aliases) {
-        $prog .= ' (' . join(', ', @$aliases) . ')';
-    }
 
+    $prog .= ' (' . join(', ', @$aliases) . ')' if @$aliases;
+
+    $self->{-subparsers}{-aliases}{$command} = $aliases;
     return $self->{-subparsers}{-parsers}{$command} = __PACKAGE__->new(
         prog                => $prog,
         help                => $help,
+        parents			    => $parents,
         description         => $description,
         error_prefix        => $self->error_prefix,
         print_usage_if_help => $self->print_usage_if_help,
@@ -308,10 +313,27 @@ sub add_argument {
     my @flags = @{ $flags };
 
     ################
+    # nargs - positional only
+    ################
+    ################
     # type
     ################
     my $type_name = delete $args->{type} || 'Scalar';
     my $type = $Type2ConstMap{$type_name} if exists $Type2ConstMap{$type_name};
+
+    my $nargs = delete $args->{nargs};
+
+    if ( defined $nargs ) {
+        croak $self->error_prefix . 'nargs only allowed for positional options' if @flags;
+
+        if (   $type != TYPE_PAIR
+            && $type != TYPE_ARRAY
+            && $nargs ne '1'
+            && $nargs ne '?'
+        ) {
+            $type = TYPE_ARRAY;
+        }
+    }
 
     croak $self->error_prefix . "unknown type=$type_name" unless defined $type;
 
@@ -446,24 +468,6 @@ sub add_argument {
     } else {
         if (exists $self->{-option_specs}{$dest}) {
             croak $self->error_prefix . "option dest=$dest already used by an optional argument";
-        }
-    }
-
-    ################
-    # nargs - positional only
-    ################
-
-    my $nargs = delete $args->{nargs};
-
-    if (defined $nargs ) {
-        croak $self->error_prefix . 'nargs only allowed for positional options' if @flags;
-
-        if (   $type != TYPE_PAIR
-            && $type != TYPE_ARRAY
-            && $nargs ne '1'
-            && $nargs ne '?'
-        ) {
-            $type = TYPE_ARRAY;
         }
     }
 
@@ -696,6 +700,9 @@ sub _parse_optional_args {
 sub _parse_positional_args {
     my $self = shift;
     my $specs = shift;
+
+    # short-circuit it if it's for help
+    return if $self->namespace->help;
 
     my $options   = {};
     my $dest2spec = {};
@@ -988,13 +995,23 @@ sub format_usage {
         push @usage, wrap('', '', $self->{-subparsers}{-title});
         push @usage, wrap('', '', $self->{-subparsers}{-description}) if $self->{-subparsers}{-description};
 
+        my $max = 12;
+
+        for my $command ( keys  %{$self->{-subparsers}{-parsers}} ) {
+            my $len = length($command);
+            $max = $len if $len > $max;
+        }
+
+        $max *= -1;
+
         for my $command ( sort keys  %{$self->{-subparsers}{-parsers}} ) {
             my $parser = $self->{-subparsers}{-parsers}{$command};
-            my $tab_head = ' ' x ( 12 + 2 );
+            my $tab_head = ' ' x ( -1 * $max + 2 );
+
             my @desc = split("\n", wrap('', '', $parser->help));
             my $desc = (shift @desc) || '';
             $_ = $tab_head . $_ for @desc;
-            push @usage, sprintf('  %-12s%s', $parser->prog, join("\n", $desc, @desc));
+            push @usage, sprintf("  %${max}s %s", $command, join("\n", $desc, @desc));
         }
     }
 
