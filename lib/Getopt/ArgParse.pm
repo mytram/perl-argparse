@@ -2,7 +2,7 @@ require 5.008001;
 
 package Getopt::ArgParse;
 {
-    $Getopt::ArgParse::VERSION = '0.01';
+    $Getopt::ArgParse::VERSION = '1.0.0';
 };
 
 use strict;
@@ -40,7 +40,7 @@ In particular, the modules provides the following features:
 
 =head1 VERSION
 
-version 0.01
+version 1.0.0
 
 =head1 SYNOPSIS
 
