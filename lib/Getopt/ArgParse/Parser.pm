@@ -105,9 +105,10 @@ has parser_configs => ( is => 'rw', required => 1, default => sub { [] }, );
 has print_usage_if_help => (is => 'ro', default => 1);
 
 # internal properties
+
 has _option_position => ( is => 'rw', required => 1, default => sub { 0 } );
 
-# The current subcommand
+# The current subcommand the same as namespace->current_command
 has _command => ( is => 'rw');
 
 sub BUILD {
@@ -130,9 +131,20 @@ sub BUILD {
     }
 }
 
+#
+sub _check_parent {
+    my $parent = shift;
+    my $parent_class = blessed $parent;
+    croak 'parent is not a Getopt::ArgParse::Parser'
+        unless $parent_class && $parent_class->isa(__PACKAGE__);
+}
+
 sub copy {
     my $self = shift;
     my $parent = shift;
+
+    croak 'Parent is missing' unless $parent;
+    _check_parent($parent);
 
     $self->copy_args($parent);
     $self->copy_parsers($parent);
@@ -142,16 +154,18 @@ sub copy_args {
     my $self = shift;
     my $parent = shift;
 
-    $self->add_arguments( @{ $parent->{-pristine_add_arguments} } );
+    croak 'Parent is missing' unless $parent;
+    _check_parent($parent);
 
-    return unless $parent;
+    $self->add_arguments( @{ $parent->{-pristine_add_arguments} } );
 }
 
 sub copy_parsers {
     my $self = shift;
     my $parent = shift;
 
-    return unless $parent;
+    croak 'Parent is missing' unless $parent;
+    _check_parent($parent);
 
     if (exists $parent->{-subparsers}) {
         $self->add_subparsers(
@@ -219,7 +233,7 @@ sub add_subparsers {
     return $self;
 }
 
-# $command, alias => [], help => ''
+# $command, aliases => [], help => ''
 sub add_parser {
     my $self = shift;
 
@@ -281,16 +295,20 @@ sub add_parser {
     );
 }
 
+sub get_parser { $_[0]->_get_subcommand_parser(@_) }
+
 # add_arguments([arg_spec], [arg_spec1], ...)
 # Add multiple arguments.
-# Interace method
+# Interface method
 sub add_arguments {
     my $self = shift;
 
     $self->add_argument(@$_) for @_;
+
+    return $self;
 }
 
-# set_group
+#
 sub add_argument {
     my $self = shift;
 
@@ -522,6 +540,8 @@ sub add_argument {
     # specs changed, need to force to resort specs by groups
     delete $self->{-groups} if $self->{-groups};
 
+    # Return $self for chaining, $self->add_argument()->add_argument()
+    # or use add_arguments
     return $self;
 }
 
@@ -572,12 +592,17 @@ sub parse_args {
     } values %{$self->{-position_specs}};
 
     $self->{-argv} = \@argv;
+    # We still want to continue even if @argv is empty to allow:
+    #  - namespace initialization
+    #  - default values asssigned
+    #  - post checks applied, e.g. required check
 
     $self->namespace(Getopt::ArgParse::Namespace->new) unless $self->namespace;
 
     my $parsed_subcmd;
-    # If the first argument is a subcommnd, it will parse as a subcommand
-    if (exists $self->{-subparsers} && defined($argv[0]) && substr($argv[0], 0, 1) ne '-') {
+    # If the first argument is a subcommand, it will parse for the
+    # subcommand
+    if (exists $self->{-subparsers} && scalar(@argv) && defined($argv[0]) && substr($argv[0], 0, 1) ne '-') {
         # Subcommand must appear as the first argument
         # or it will parse as the top command
         my $cmd = shift @argv;
@@ -587,6 +612,8 @@ sub parse_args {
 
         $parsed_subcmd = $self->_parse_subcommand($cmd => $subparser);
     }
+
+    $self->namespace->set_attr(current_command => $self->_command) if $self->_command;
 
     if (!$parsed_subcmd) {
         $self->_parse_optional_args(\@option_specs) if @option_specs;
@@ -598,7 +625,7 @@ sub parse_args {
         }
     } else {
         if ($self->print_usage_if_help() && $self->_command() eq 'help') {
-            if ($self->namespace->help_command) {
+            if ($self->namespace->get_attr('help_command')) {
                 $self->print_command_usage();
                 exit(0);
             } else {
@@ -608,10 +635,11 @@ sub parse_args {
         }
     }
 
-    $self->namespace->set_attr(current_command => $self->_command) if $self->_command;
-
+    # Return value
     return $self->namespace;
 }
+
+# Interface
 
 sub _get_subcommand_parser {
     my $self = shift;
@@ -644,10 +672,9 @@ sub _parse_subcommand {
 #
 # After each call of parse_args(), call this to retrieve any
 # unconsumed arguments
-#
+# Interface call
 sub argv {
-    my @argv = @{ $_[0]->{-argv} || [] };
-    wantarray ? @argv  : \@argv;
+    @{ $_[0]->{-argv} || [] };
 }
 
 sub _parse_optional_args {
@@ -701,7 +728,7 @@ sub _parse_positional_args {
     my $specs = shift;
 
     # short-circuit it if it's for help
-    return if $self->namespace->help;
+    return if $self->namespace->get_attr('help');
 
     my $options   = {};
     my $dest2spec = {};
@@ -835,7 +862,7 @@ sub _post_parse_processing {
                     next VALUE if exists $choices{$k};
 
                     croak $self->error_prefix . sprintf(
-                        "option %s value %s not in allowed choices: [ %s ]",
+                        "option %s value %s not in choices: [ %s ]",
                         $spec->{dest}, $v, join( ', ', @{ $spec->{choices} } ),
                     );
                 }
@@ -853,7 +880,7 @@ sub _post_parse_processing {
                 next VALUE if exists $choices{$k};
 
                 croak $self->error_prefix . sprintf(
-                    "option %s value %s not in allowed choices: [ %s ] (case insensitive)",
+                    "option %s value %s not in choices: [ %s ] (case insensitive)",
                     $spec->{dest}, $v, join( ', ', @{ $spec->{choices_i} } ),
                 );
             }
@@ -919,7 +946,7 @@ sub _post_apply_processing {
     }
 }
 
-#
+# interface
 sub print_usage {
     my $self = shift;
 
@@ -928,20 +955,25 @@ sub print_usage {
     print STDERR $_, "\n" for @$usage;
 }
 
+# interface
 sub print_command_usage {
     my $self = shift;
-    my $command = shift || $self->namespace->help_command || $self->namespace->current_command; # running help command
+    my $command = shift
+        || $self->namespace->get_attr('help_command')
+        || $self->namespace->get_attr('current_command'); # running help command
+
     my $usage = $self->format_command_usage($command);
     if ($usage) {
         print STDERR $_, "\n" for @$usage;
     } else {
         print STDERR
             $self->error_prefix,
-            sprintf('No help for %s. See help', $self->namespace->help_command),
+            sprintf('No help for %s. See help', $self->namespace->get_attr('help_command')),
             "\n";
     }
 }
 
+# interface
 sub format_usage {
     my $self = shift;
 

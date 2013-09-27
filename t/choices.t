@@ -69,6 +69,12 @@ lives_ok(
         );
 });
 
+throws_ok(
+    sub { $n = $p->parse_args('--choice', 'abc'); },
+    qr/not in choices/,
+    'not in allowed choices_i',
+);
+
 $n = $p->parse_args('--choice', 'WORLD');
 
 ok($n->choice eq 'WORLD', "WORLD is OK");

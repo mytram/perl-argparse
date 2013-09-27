@@ -48,9 +48,13 @@ throws_ok(
 
 lives_ok(
     sub {
-        $ns = $parser->parse_args(split(/ /, '-foo 10 20 30 --array a --array b --array c'));
+        $ns = $parser->parse_args(split(/ /, '-foo 10 20 30 --array a --array b --array c hello world'));
     },
 );
+
+@argv = $parser->argv;
+ok(scalar(@argv) == 4, 'argv has got the unconsumed argv');
+ok($argv[0] == 20, 'argv[0] is 20');
 
 $parser->namespace(undef);
 $ns = $parser->parse_args(split(/ /, '-foo 10 20 30 -b --array a --array b --array c'));

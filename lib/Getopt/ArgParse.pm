@@ -138,9 +138,11 @@ when parse_args() is called multiple times.
 Though inspired by Python's argparse and names and ideas are borrowed
 from it, there is a lot of difference from the Python one.
 
-Getopt::ArgParse::Parser is a Moo class.
+=head2 Getopt::ArgParser::Parser
 
-=head2 METHODS
+This is the underlying parser that does the heavylifting.
+
+Getopt::ArgParse::Parser is a Moo class.
 
 =head3 Constructor
 
@@ -351,17 +353,16 @@ This object method accepts a list of arguments or @ARGV if
 unspecified, parses them for values, and stores the values in the
 namespace object.
 
-It does NOT display usage messages if the argument list is empty.
+A few things may be worth noting about parse_args().
 
-=head4 Parsing for Positional Arguments
+First, parsing for Optional Arguments is done by Getopt::Long
 
-The parsing for positional arguments takes place after that for
+Second, parsing for positional arguments takes place after that for
 optional arguments. It will consume what's still left in the command
 line.
 
-=head4 The namespace object is accumulatively poplulated
-
-If parse_args() is called multiple times to parse a number of command
+Finally, the Namespace object is accumulatively poplulated. If
+parse_args() is called multiple times to parse a number of command
 lines, the same namespace object is accumulatively populated.  For
 Scalar and Bool options, this means the previous value will be
 overwrittend. For Pair and Array options, values will be appended. And
@@ -371,10 +372,31 @@ In face, the program can choose to pass a already populated namespace
 when creating a parser object. This is to allow the program to pre-load
 values to a namespace from conf files before parsing the command line.
 
+And finally, it does NOT display usage messages if the argument list
+is empty. This may be contrary to many other implementations of
+argument parsing.
+
 =head3 argv()
 
 Call this after parse_args() is invoked to get the unconsumed
 arguments.
+
+=head3 The Namespace Object
+
+The parsed values are stored in a namespace object. Any class with the
+following three methods:
+
+  * A constructor new()
+  * set_attr(name => value)
+  * get_attr(name)
+
+can be used as the Namespace class.
+
+The default one is Getopt::ArgParse::Namespace. It uses autoload to
+provide a readonly accessor method using dest names to access parsed
+values. However, this is not required for user-defined namespace. So
+within the implementation, $namespace->get_attr($dest) should always
+be used.
 
 =head2 Subcommand Support
 
@@ -423,9 +445,13 @@ A general description appearing about the title
 
 =back
 
-=head3 add_parse( ... )
+=head3 add_parser( $command, [ ... ] )
 
 =over 8
+
+=item * $command
+
+The first argument is the name of the new command.
 
 =item * help
 
@@ -435,7 +461,20 @@ A short description of the subcommand.
 
 A long description of the subcommand.
 
+=item * alaises
+
+An array reference containing a list of command alaises.
+
+=item * parents
+
+An array reference containing a list of parsers whose specification
+will be copied by the new parser.
+
 =back
+
+=head2 get_parser($alias)
+
+Return the parser for parsing the $alias command if exsist.
 
 =head2 Copying Parsers
 
