@@ -4,7 +4,6 @@ use warnings;
 use ExtUtils::MakeMaker;
 
 my %WriteMakefileArgs = (
-    'ABSTRACT'       => 'A Perl argument parser',
     'AUTHOR'         => 'Mytram <mytram2@gmail.com>',
     'BUILD_REQUIRES' => {},
     'DISTNAME'       => 'Getopt-ArgParse',
