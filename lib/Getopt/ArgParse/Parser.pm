@@ -610,10 +610,10 @@ sub parse_args {
         croak $self->error_prefix . sprintf("%s is not a %s command. See help", $cmd, $self->prog)
             unless $subparser;
 
-        $parsed_subcmd = $self->_parse_subcommand($cmd => $subparser);
-    }
+        $parsed_subcmd = $self->_parse_subcommand($self->_command => $subparser);
 
-    $self->namespace->set_attr(current_command => $self->_command) if $self->_command;
+        $self->namespace->set_attr(current_command => $self->_command);
+    }
 
     if (!$parsed_subcmd) {
         $self->_parse_optional_args(\@option_specs) if @option_specs;
