@@ -604,7 +604,8 @@ sub parse_args {
     $self->namespace(Getopt::ArgParse::Namespace->new) unless $self->namespace;
 
     my $parsed_subcmd;
-    $self->namespace->set_attr('current_command' => undef); # init
+    $self->namespace->set_attr('current_command' => undef)
+        unless defined $self->namespace->get_attr('current_command'); # init
 
     # If the first argument is a subcommand, it will parse for the
     # subcommand
