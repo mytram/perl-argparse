@@ -411,7 +411,7 @@ sub add_argument {
                 if $type != TYPE_PAIR;
             $default = $val;
         } else {
-            $val = [ $val ];
+            $default = [ $val ];
         }
 
         if ($type != TYPE_PAIR) {
