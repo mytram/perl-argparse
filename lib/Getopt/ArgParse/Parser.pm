@@ -400,6 +400,10 @@ sub add_argument {
     my $default;
     if (exists $args->{default}) {
         my $val = delete $args->{default};
+        if (ref($val) eq 'CODE') {
+            $val = $val->();
+        }
+
         if (ref($val) eq 'ARRAY') {
             $default = $val;
         } elsif (ref($val) eq 'HASH') {
@@ -407,7 +411,7 @@ sub add_argument {
                 if $type != TYPE_PAIR;
             $default = $val;
         } else {
-            $default = [ $val ];
+            $val = [ $val ];
         }
 
         if ($type != TYPE_PAIR) {
@@ -600,6 +604,8 @@ sub parse_args {
     $self->namespace(Getopt::ArgParse::Namespace->new) unless $self->namespace;
 
     my $parsed_subcmd;
+    $self->namespace->set_attr('current_command' => undef); # init
+
     # If the first argument is a subcommand, it will parse for the
     # subcommand
     if (exists $self->{-subparsers} && scalar(@argv) && defined($argv[0]) && substr($argv[0], 0, 1) ne '-') {
