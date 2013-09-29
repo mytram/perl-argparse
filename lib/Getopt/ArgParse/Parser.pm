@@ -400,9 +400,6 @@ sub add_argument {
     my $default;
     if (exists $args->{default}) {
         my $val = delete $args->{default};
-        if (ref($val) eq 'CODE') {
-            $val = $val->();
-        }
 
         if (ref($val) eq 'ARRAY') {
             $default = $val;
