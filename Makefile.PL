@@ -4,11 +4,12 @@ use warnings;
 use ExtUtils::MakeMaker;
 
 my %WriteMakefileArgs = (
+    'ABSTRACT'       => 'Parsing args with a richer and more user-friendly API',
     'AUTHOR'         => 'Mytram <mytram2@gmail.com>',
     'BUILD_REQUIRES' => {},
     'DISTNAME'       => 'Getopt-ArgParse',
     'EXE_FILES'      => [],
-    'LICENSE'        => 'perl',
+    'LICENSE'        => 'perl_5',
     'NAME'           => 'Getopt-ArgParse',
     MIN_PERL_VERSION => '5.008',
     'PREREQ_PM' => {
@@ -16,7 +17,6 @@ my %WriteMakefileArgs = (
         'Getopt::Long' => '2.38',
     },
     'VERSION_FROM' => 'lib/Getopt/ArgParse.pm',
-    'ABSTRACT_FROM' => 'lib/Getopt/ArgParse.pm',
     'test' => {
         'TESTS' => 't/*.t'
     },

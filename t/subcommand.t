@@ -78,7 +78,6 @@ throws_ok(
     'subcommand listx already defined',
 );
 
-
 throws_ok(
     sub {
         $pp = $sp->add_parser(
@@ -145,6 +144,7 @@ lives_ok(
     },
 );
 
+ok($n->current_command eq 'list', 'current_command is list');
 ok($n->foo, "list's foo is true");
 ok($n->boo, "list's boo is true");
 

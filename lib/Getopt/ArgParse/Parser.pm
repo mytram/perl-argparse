@@ -7,6 +7,7 @@ use Getopt::Long qw(GetOptionsFromArray);
 use Text::Wrap;
 use Scalar::Util qw(blessed);
 
+use File::Basename ();
 use Getopt::ArgParse::Namespace;
 
 use constant {
@@ -53,20 +54,21 @@ my %Type2ConstMap = (
 
 # Program name. Default $0
 
-has prog => ( is => 'rw', required => 1, default => sub { $0 }, );
+has prog         => ( is => 'rw', required => 1, default => sub { File::Basename::basename($0) }, );
 
-#
-has help => ( is => 'rw', required => 1, default => sub { '' }, );
+# short one
+has help         => ( is => 'rw', required => 1, default => sub { '' }, );
 
-has description => ( is => 'rw', required => 1, default => sub { '' }, );
+# long one
+has description  => ( is => 'rw', required => 1, default => sub { '' }, );
 
-#
-has epilog => ( is => 'rw', required => 1, default => sub { '' }, );
+has epilog       => ( is => 'rw', required => 1, default => sub { '' }, );
 
 has error_prefix => (is => 'rw', default => sub { ERROR_PREFIX() }, );
 
-# namespace() - Read/write
+has aliases      => (is => 'ro', default => sub { [] }); # for subcommand only
 
+# namespace() - Read/write
 # Contains the parsed results.
 has namespace => (
     is => 'rw',
@@ -282,11 +284,12 @@ sub add_parser {
 
     my $prog = $command;
 
-    $prog .= ' (' . join(', ', @$aliases) . ')' if @$aliases;
+    # $prog .= ' (' . join(', ', @$aliases) . ')' if @$aliases;
 
     $self->{-subparsers}{-aliases}{$command} = $aliases;
     return $self->{-subparsers}{-parsers}{$command} = __PACKAGE__->new(
         prog                => $prog,
+        aliases             => $aliases, # subcommand
         help                => $help,
         parents			    => $parents,
         description         => $description,
@@ -296,6 +299,10 @@ sub add_parser {
 }
 
 sub get_parser { $_[0]->_get_subcommand_parser(@_) }
+
+*add_arg = \&add_argument;
+
+*add_args = \&add_arguments;
 
 # add_arguments([arg_spec], [arg_spec1], ...)
 # Add multiple arguments.
@@ -601,8 +608,7 @@ sub parse_args {
     $self->namespace(Getopt::ArgParse::Namespace->new) unless $self->namespace;
 
     my $parsed_subcmd;
-    $self->namespace->set_attr('current_command' => undef)
-        unless defined $self->namespace->get_attr('current_command'); # init
+    $self->namespace->set_attr(current_command => undef);
 
     # If the first argument is a subcommand, it will parse for the
     # subcommand
@@ -611,8 +617,9 @@ sub parse_args {
         # or it will parse as the top command
         my $cmd = shift @argv;
         my $subparser = $self->_get_subcommand_parser($cmd);
-        croak $self->error_prefix . sprintf("%s is not a %s command. See help", $cmd, $self->prog)
-            unless $subparser;
+        croak $self->error_prefix
+            . sprintf("%s is not a %s command. See help", $cmd, $self->prog)
+                unless $subparser;
 
         $parsed_subcmd = $self->_parse_subcommand($self->_command => $subparser);
 
@@ -642,8 +649,6 @@ sub parse_args {
     # Return value
     return $self->namespace;
 }
-
-# Interface
 
 sub _get_subcommand_parser {
     my $self = shift;
@@ -677,6 +682,7 @@ sub _parse_subcommand {
 # After each call of parse_args(), call this to retrieve any
 # unconsumed arguments
 # Interface call
+#
 sub argv {
     @{ $_[0]->{-argv} || [] };
 }
@@ -977,7 +983,7 @@ sub print_command_usage {
     }
 }
 
-# interface
+# Interface
 sub format_usage {
     my $self = shift;
 
@@ -987,7 +993,10 @@ sub format_usage {
 
     my @usage;
 
-    push @usage, wrap('', '', $self->prog. ': ' . $self->help);
+    my $aliases = $self->aliases;
+    my $prog = $self->prog;
+    $prog .= ' (' . join(', ', @$aliases) . ')' if @$aliases;
+    push @usage, wrap('', '', $prog. ': ' . $self->help);
 
     my ($help, $option_string) =  $self->_format_group_usage();
     $Text::Wrap::columns = 80;
@@ -1117,8 +1126,8 @@ sub _format_group_usage {
     } @{ $self->{-groups}{$group}{-position} || [] };
 
     my @position_items = map {
-            ($_->{required} ? '' : '[')
-            . $_->{metavar}
+              ($_->{required} ? '' : '[')
+            .  $_->{metavar}
             . ($_->{required} ? '' : ']')
     } @position_specs;
 
@@ -1127,9 +1136,6 @@ sub _format_group_usage {
     if ($group) {
         push @usage, wrap('', '', $group . ': ' . ($self->{-group_description}{$group} || '')  );
     }
-
-    # push @usage, wrap('', '', $position_string) if $position_string;
-    # push @usage, wrap('', '', $flag_string) if $flag_string;
 
     if (@position_specs) {
         push @usage, 'positional arguments:';
@@ -1140,8 +1146,6 @@ sub _format_group_usage {
         push @usage, 'optional arguments:';
         push @usage, @{ $self->_format_usage_by_spec(\@option_specs) };
     }
-
-    # push @usage, '';
 
     $Text::Wrap::columns = $old_wrap_columns; # restore to original
 

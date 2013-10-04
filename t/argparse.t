@@ -52,6 +52,8 @@ lives_ok(
     },
 );
 
+ok(!$ns->current_command, 'current_command is not defined');
+
 @argv = $parser->argv;
 ok(scalar(@argv) == 4, 'argv has got the unconsumed argv');
 ok($argv[0] == 20, 'argv[0] is 20');

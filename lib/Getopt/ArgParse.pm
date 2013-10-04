@@ -2,8 +2,10 @@ require 5.008001;
 
 package Getopt::ArgParse;
 {
-    $Getopt::ArgParse::VERSION = '1.0.0';
+    $Getopt::ArgParse::VERSION = '1.0.1';
 };
+
+# ABSTRACT: Getopt::ArgParse - Parsing args with a richer and more user-friendly API
 
 use strict;
 use warnings;
@@ -24,8 +26,9 @@ sub new_parser {
 
 =head1 NAME
 
-Getopt::ArgParse - Parsing command line arguments with a user-friendly
-interface, similar to python's argpare but with perlish extras.
+Getopt::ArgParse - Parsing command line arguments with a richer and
+more user-friendly API interface, similar to python's argpare but with
+perlish extras.
 
 In particular, the modules provides the following features:
 
@@ -40,7 +43,7 @@ In particular, the modules provides the following features:
 
 =head1 VERSION
 
-version 1.0.0
+version 1.0.1
 
 =head1 SYNOPSIS
 
@@ -53,15 +56,15 @@ version 1.0.0
  );
 
  # Parse an option: '--foo value' or '-f value'
- $ap->add_argument('--foo', '-f', required => 1);
+ $ap->add_arg('--foo', '-f', required => 1);
 
  # Parse a boolean: '--bool' or '-b' using a different name from
  # the option
- $ap->add_argument('--bool', '-b', type => 'Bool', dest => 'boo');
+ $ap->add_arg('--bool', '-b', type => 'Bool', dest => 'boo');
 
  # Parse a positonal option.
  # But in this case, better using subcommand. See below
- $ap->add_argument('command', required => 1);
+ $ap->add_arg('command', required => 1);
 
  # $ns is also accessible via $ap->namespace
  $ns = $ap->parse_args(split(' ', 'test -f 1 -b'));
@@ -75,7 +78,7 @@ version 1.0.0
  # $ap->namespace is accumulatively populated
 
  # Parse an Array type option and split the value into an array of values
- $ap->add_argument('--emails', type => 'Array', split => ',');
+ $ap->add_arg('--emails', type => 'Array', split => ',');
  $ns = $ap->parse_args(split(' ', '--emails a@perl.org,b@perl.org,c@perl.org'));
  # Because this is an array option, this also allows you to specify the
  # option multiple times and splitting
@@ -86,7 +89,7 @@ version 1.0.0
  say join('|', $ns->emails);
 
  # Parse an option as key,value pairs
- $ap->add_argument('--param', type => 'Pair', split => ',');
+ $ap->add_arg('--param', type => 'Pair', split => ',');
  $ns = $ap->parse_args(split(' ', '--param a=1,b=2,c=3'));
 
  say $ns->param->{a}; # 1
@@ -94,15 +97,15 @@ version 1.0.0
  say $ns->param->{c}; # 3
 
  # You can use choice to restrict values
- $ap->add_argument('--env', choices => [ 'dev', 'prod' ],);
+ $ap->add_arg('--env', choices => [ 'dev', 'prod' ],);
 
  # or use case-insensitive choices
  # Override the previous option with reset
- $ap->add_argument('--env', choices_i => [ 'dev', 'prod' ], reset => 1);
+ $ap->add_arg('--env', choices_i => [ 'dev', 'prod' ], reset => 1);
 
  # or use a coderef
  # Override the previous option
- $ap->add_argument(
+ $ap->add_args(
  	'--env',
  	choices => sub {
  		die "--env invalid values" if $_[0] !~ /^(dev|prod)$/i;
@@ -118,7 +121,7 @@ version 1.0.0
          description => 'A multiple paragraphs long description.',
  );
 
- $list_parser->add_arguments(
+ $list_parser->add_args(
    [
      '--verbose', '-v',
       type => 'Count',
@@ -141,7 +144,7 @@ version 1.0.0
 
  # Copy parsing
  $common_args = Getopt::ArgParse->new_parser();
- $common_args->add_arguments(
+ $common_args->add_args(
    [
      '--dry-run',
       type => 'Bool',
@@ -191,7 +194,10 @@ Getopt::ArgParse::Parser is a Moo class.
 
 =head3 Constructor
 
-Getopt::ArgParse->new_parser( ...) or Getopt::ArgParse::Parser->new( ... )
+  my $parser = Getopt::ArgParse->new_parser(
+    help        => 'short description',
+    description => 'long description',
+  );
 
 The former calls Getopt::ArgParser::Parser->new to create a parser
 object. The parser constructor accepts the following parameters.
@@ -242,12 +248,17 @@ usage messages if help is set.
 
 =back
 
-=head3 add_argument( ... ) and add_arguments( ... )
+=head3 add_arg, add_argument, add_args, and add_arguments
 
-This object method defines the specfication of an argument. It accepts
-the following parameters.
+  $parser->add_args(
+    [ '--foo', required => 1, type => 'Array', split => ',' ],
+    [ 'boo', required => 1, nargs => '+' ],
+  );
 
-add_arguments() is to add multiple multiple arguments at the same time
+The object method, arg_arg or the longer version add_argument, defines
+the specfication of an argument. It accepts the following parameters.
+
+add_args or add_arguments() is to add multiple multiple arguments.
 
 =over 8
 
@@ -263,7 +274,7 @@ option argument.
 Hyphens can be used in names and flags, but they will be replaced with
 underscores '_' when used as option names. For example:
 
-    $parser->add_argument('--dry-run', type => 'Bool');
+    $parser->add_argument( [ '--dry-run', type => 'Bool' ]);
     # command line: prog --dry-run
     $parser->namespace->dry_run; # The option's name is dry_run
 
@@ -397,7 +408,9 @@ result.
 
 =back
 
-=head3 parse_args( ... )
+=head3 parse_args
+
+  $namespace = $parser->parse_args(@command_line);
 
 This object method accepts a list of arguments or @ARGV if
 unspecified, parses them for values, and stores the values in the
@@ -426,10 +439,13 @@ And finally, it does NOT display usage messages if the argument list
 is empty. This may be contrary to many other implementations of
 argument parsing.
 
-=head3 argv()
+=head3 argv
+
+  @argv = $parser->argv; # called after parse_args
 
 Call this after parse_args() is invoked to get the unconsumed
-arguments.
+arguments. It's up to the application to decide what to do if there is
+a surplus of arguments.
 
 =head3 The Namespace Object
 
@@ -481,9 +497,14 @@ parsing successfully.
 
 Unlike arguments, subparsers cannot be reset.
 
-=head3 add_subparsers( ... )
+=head3 add_subparsers
 
-add_subparses must be called to initialize subcommand support.
+  $parser->add_subparsers(
+    title       => 'Subcommands',
+    description => 'description about providing subcommands',
+  );
+
+add_subparsers must be called to initialize subcommand support.
 
 =over 8
 
@@ -498,7 +519,16 @@ A general description appearing about the title
 
 =back
 
-=head3 add_parser( $command, [ ... ] )
+=head3 add_parser
+
+  $subparser = $parser->add_parser(
+     'list',
+     aliases     => [qw(ls)],
+     help        => 'short description',
+     description => 'a long one',
+     parents => [ $common_args ], # inherit common args from
+                                  # $common_args
+  );
 
 =over 8
 
@@ -525,7 +555,9 @@ will be copied by the new parser.
 
 =back
 
-=head2 get_parser($alias)
+=head2 get_parser
+
+   $subparser = $parser->get_parser('ls');
 
 Return the parser for parsing the $alias command if exsist.
 
@@ -535,35 +567,49 @@ A parser can copy argument specification or subcommand specifciation
 for existing parsers. A use case for this is that the program wants all
 subcommands to have a command set of arguments.
 
-=head3 copy_args($parent)
+=head3 copy_args
+
+   $parser->copy_args($common_args_parser);
 
 Copy argument specification from the $parent parser
 
-=head3 copy_parsers($parent)
+=head3 copy_parsers
+
+   $parser->copy_parsers($common_args_parser);
 
 Copy parser specification for subcommands from the $parent parser
 
-=head3 copy($parent)
+=head3 copy
 
-Copy both.
+   $parser->copy($common_args_parser);
+
+Copy both arguments and subparsers.
 
 =head2 Usage Messages and Related Methods
 
-=head3 format_usage()
+=head3 format_usage
+
+  $usage = $parser->format_usage;
 
 Return the formated usage message for the whole program in an array
 reference.
 
-=head3 print_usage()
+=head3 print_usage
+
+   $parser->print_usage;
 
 Print the usage mesage returned by format_usage().
 
-=head3 format_command_usage($command)
+=head3 format_command_usage
+
+  $usage = $parser->format_command_usage($subcommand);
 
 Return the formated usage message for the command in an array
 reference.
 
-=head3 print_command_usage([$command])
+=head3 print_command_usage
+
+  $parser->print_command_usage($subcommand);
 
 Print the usage message returned by format_command_usage(). If
 $command is not given, it will first try to use
@@ -575,7 +621,6 @@ subcommand, and then $self->namespace->current_command.
 =head1 SEE ALSO
 
 Getopt::Long
-
 Python's argparse
 
 =head1 AUTHOR
