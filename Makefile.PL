@@ -13,17 +13,18 @@ my %WriteMakefileArgs = (
     'NAME'           => 'Getopt-ArgParse',
     MIN_PERL_VERSION => '5.008',
     'PREREQ_PM' => {
-        'Moo'          => '1.003',
-        'Getopt::Long' => '2.38',
+        'Moo'             => '1.003',
+        'Getopt::Long'    => '2.38',
+        'Test::Exception' => '0.31',
     },
     'VERSION_FROM' => 'lib/Getopt/ArgParse.pm',
     'test' => {
         'TESTS' => 't/*.t'
     },
     META_MERGE => {
-resources => {
-repository => 'https://github.com/mytram/perl-argparse',
-},
+        resources => {
+            repository => 'https://github.com/mytram/perl-argparse',
+        },
    },
 );
 

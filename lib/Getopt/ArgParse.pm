@@ -2,7 +2,7 @@ require 5.008001;
 
 package Getopt::ArgParse;
 {
-    $Getopt::ArgParse::VERSION = '1.0.2';
+    $Getopt::ArgParse::VERSION = '1.0.3';
 };
 
 # ABSTRACT: Getopt::ArgParse - Parsing args with a richer and more user-friendly API
@@ -43,7 +43,7 @@ In particular, the modules provides the following features:
 
 =head1 VERSION
 
-version 1.0.2
+version 1.0.3
 
 =head1 SYNOPSIS
 
@@ -544,9 +544,9 @@ A short description of the subcommand.
 
 A long description of the subcommand.
 
-=item * alaises
+=item * aliases
 
-An array reference containing a list of command alaises.
+An array reference containing a list of command aliases.
 
 =item * parents
 
