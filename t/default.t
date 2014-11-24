@@ -19,7 +19,7 @@ ok($n->foo eq 20, "foo 20");
 
 throws_ok(
     sub { $p->add_argument('--optional-option', default => [ 10, 20 ]); },
-    qr/multiple default values/,
+    qr/Multiple default values/,
     'multiple default values not allowed',
 );
 

@@ -47,7 +47,7 @@ $p->add_argument(
 
 throws_ok(
     sub { $n = $p->parse_args(split(' ', 'abc 100 200 300')); },
-    qr/too few arguments/,
+    qr/Too few arguments/,
     'too few arguments for +',
 );
 
@@ -89,7 +89,7 @@ throws_ok (
 $p->add_argument('f', nargs => 'abc');
 throws_ok (
     sub { $p->parse_args('abc') },
-    qr/invalid/,
+    qr/Invalid nargs/,
     'invalid nargs',
 );
 

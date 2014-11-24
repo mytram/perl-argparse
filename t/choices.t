@@ -46,7 +46,7 @@ throws_ok ( sub {
                     choices_i => [ 'A', 'B', 'C' ],
                 );
             },
-            qr/not allow to specify/,
+            qr/Not allow to specify/,
             'not allow to specify choices and choices_i',
 );
 
