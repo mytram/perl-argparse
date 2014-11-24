@@ -24,7 +24,7 @@ throws_ok(
     sub {
         $p->add_argument('--', '-foo');
     },
-    qr/empty option name/,
+    qr/Empty option name/,
     "non-empty name is required"
 );
 

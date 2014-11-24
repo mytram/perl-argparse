@@ -12,13 +12,13 @@ ok($p, 'new parser');
 
 throws_ok(
     sub { $p->add_subparsers( 'parser', ); },
-    qr /incorrect number of arguments/,
+    qr /Incorrect number of arguments/,
     'incorrect number of args',
 );
 
 throws_ok(
     sub { $p->add_subparsers( something => 'parser', something2 => 'parser'); },
-    qr /unknown parameters: something/,
+    qr /Unknown parameters: something/,
     'unknown parameters',
 );
 
@@ -28,7 +28,7 @@ lives_ok(
 
 throws_ok(
     sub { $p->add_subparsers(); },
-    qr/subparsers already added/,
+    qr/Subparsers already added/,
     'subparsers already added',
 );
 
@@ -52,20 +52,20 @@ $sp = $p->add_subparsers(
 
 throws_ok(
     sub { $pp = $p->add_parser() },
-    qr /subcommand is empty/,
-    'subcommand is empty',
+    qr /Subcommand is empty/,
+    'Subcommand is empty',
 );
 
 throws_ok(
     sub { $pp = $p->add_parser(listx => 'add listx') },
-    qr/incorrect number of arg/,
-    'incorrect number of args',
+    qr/Incorrect number of arg/,
+    'Incorrect number of args',
 );
 
 throws_ok(
     sub { $p->add_parser( 'listx', something => 'parser', something2 => 'parser'); },
-    qr /unknown parameters: something/,
-    'unknown parameters',
+    qr /Unknown parameters: something/,
+    'Unknown parameters',
 );
 
 $sp->add_parser(
@@ -74,7 +74,7 @@ $sp->add_parser(
 
 throws_ok(
     sub { $pp = $p->add_parser('listx') },
-    qr /subcommand listx already defined/,
+    qr /Subcommand listx already defined/,
     'subcommand listx already defined',
 );
 
@@ -86,7 +86,7 @@ throws_ok(
             help => 'This is the list subcommand',
         );
     },
-    qr/aliases is not an arrayref/,
+    qr/Aliases is not an arrayref/,
     'aliases is not an arrayref',
 );
 
@@ -98,7 +98,7 @@ throws_ok(
             help => 'This is the list subcommand',
         );
     },
-    qr/alias=lx already used/,
+    qr/Alias=lx already used/,
     'alias already used'
 );
 

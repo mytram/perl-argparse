@@ -42,7 +42,7 @@ throws_ok(
     sub {
         $parser->add_argument('-a', 'b');
     },
-    qr/incorrect number of arguments/,
+    qr/Incorrect number of arguments/,
     'incorrect number of arguments',
 );
 
@@ -85,7 +85,7 @@ throws_ok(
             nargs => 2,
         );
     },
-    qr/unknown type/,
+    qr/Unknown type/,
     'unknown type',
 );
 

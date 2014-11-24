@@ -47,7 +47,7 @@ $p->namespace(undef);
 
 throws_ok(
     sub { $p->add_argument('params', type => 'Pair', nargs => '?', default => { a => 10 }); },
-    qr/redefine option params without reset/,
+    qr/Redefine option params without reset/,
     'redefine option with reset',
 );
 lives_ok(

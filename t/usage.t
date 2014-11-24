@@ -21,8 +21,8 @@ $parser->add_argument('--verbose', '-v', type => 'Bool');
 
 throws_ok (
     sub { $parser->add_argument('--verbose', type => 'Count'); },
-    qr/redefine option verbose without reset/,
-    'not allow to override',
+    qr/Redefine option verbose without reset/,
+    'redefine option'
 );
 
 $parser->add_argument('--verbose', type => 'Count', reset => 1);

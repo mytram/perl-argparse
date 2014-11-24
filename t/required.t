@@ -86,8 +86,8 @@ ok($n->boo == 100, 'boo is 100');
 
 throws_ok(
     sub { $p->add_argument('boo', nargs => 2); },
-    qr/redefine option boo without reset/,
-    'not allow to override',
+    qr/Redefine option boo without reset/,
+    'Redfine option boo'
 );
 
 lives_ok(
@@ -100,7 +100,7 @@ lives_ok(
 
 throws_ok(
     sub { $n = $p->parse_args(split(' ', '-f 10 111')); },
-    qr/too few arguments for boo/,
+    qr/Too few arguments for boo/,
     'not enough args for boo',
 );
 
@@ -118,7 +118,7 @@ throws_ok(
 
 throws_ok(
     sub { $n = $p->parse_args(split(' ', '-f 10 100')); },
-    qr/too few arguments for boo/,
+    qr/Too few arguments for boo/,
     'not enough args for boo',
 );
 
