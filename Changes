@@ -1,4 +1,12 @@
-Revision history for Getopt-Long-Descriptive
+Revision history for Getopt-ArgParse
+
+1.0.4     2014-11-24 15:48:43 
+        - Added artistic 2 license (issue#2)
+	    - Worked around what seemed to be a corrupted stack issue,
+          which caused "Bizarre copy of HASH in list assignment at
+          Carp" to be thrown (issue#3)
+        - Updated error messages to be more consisten with
+          Getopt::Long (issue#3)
 
 1.0.3     2013-10-28 07:41:38 
         - Added module dependency Test::Exception in Makefile
