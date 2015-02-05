@@ -201,7 +201,7 @@ sub add_subparsers {
 
     my $args = { @_ };
 
-    my $title       = (delete $args->{title} || 'Subcommands') . ':';
+    my $title       = (delete $args->{title} || 'subcommands') . ':';
     my $description = delete $args->{description} || '';
 
     _croak $self->error_prefix . sprintf(
@@ -1005,7 +1005,10 @@ sub format_usage {
     my $aliases = $self->aliases;
     my $prog = $self->prog;
     $prog .= ' (' . join(', ', @$aliases) . ')' if @$aliases;
-    push @usage, wrap('', '', $prog. ': ' . $self->help);
+    if( $self->help ) {
+        push @usage, wrap('', '', $prog. ': ' . $self->help);
+        push @usage, '';
+    }
 
     my ($help, $option_string) =  $self->_format_group_usage();
     $Text::Wrap::columns = 80;
@@ -1039,8 +1042,6 @@ sub format_usage {
         }
     }
 
-    push @usage, '';
-
     push @usage, @$help;
 
     if (exists $self->{-subparsers}) {
@@ -1055,16 +1056,14 @@ sub format_usage {
             $max = $len if $len > $max;
         }
 
-        $max *= -1;
-
         for my $command ( sort keys  %{$self->{-subparsers}{-parsers}} ) {
             my $parser = $self->{-subparsers}{-parsers}{$command};
-            my $tab_head = ' ' x ( -1 * $max + 2 );
+            my $tab_head = ' ' x ( $max + 2 );
 
             my @desc = split("\n", wrap('', '', $parser->help));
             my $desc = (shift @desc) || '';
             $_ = $tab_head . $_ for @desc;
-            push @usage, sprintf("  %${max}s %s", $command, join("\n", $desc, @desc));
+            push @usage, sprintf("  %-${max}s    %s", $command, join("\n", $desc, @desc));
         }
     }
 
@@ -1147,11 +1146,13 @@ sub _format_group_usage {
     }
 
     if (@position_specs) {
+        push @usage, '';
         push @usage, 'positional arguments:';
         push @usage, @{ $self->_format_usage_by_spec(\@position_specs) };
     }
 
     if (@option_specs) {
+        push @usage, '';
         push @usage, 'optional arguments:';
         push @usage, @{ $self->_format_usage_by_spec(\@option_specs) };
     }
@@ -1172,11 +1173,14 @@ sub _format_usage_by_spec {
     my @item_help;
 
     for my $spec ( @$specs ) {
-        my $item = sprintf(
-            "%s %s",
-            join(', ',  @{$spec->{flags}}),
-            $spec->{metavar},
-        );
+        my $item = $spec->{metavar};
+        if (@{$spec->{flags}}) {
+            $item = sprintf(
+                "%s %s",
+                join(', ',  @{$spec->{flags}}),
+                $spec->{metavar},
+            );
+        }
         my $len = length($item);
         $max = $len if $len > $max;
 
@@ -1226,14 +1230,13 @@ sub _format_usage_by_spec {
         ];
     }
 
-    $max *= -1;
-    my $format = "    %${max}s    %s %s";
+    my $format = "  %-${max}s    %s %s";
     $Text::Wrap::columns = 60;
     for my $ih (@item_help) {
         my $item_len = length($ih->[0]);
         # The prefixed whitespace in subsequent lines in the wrapped
         # help string
-        my $sub_tab = " " x (-1 * $max + 4 + 4 + 2);
+        my $sub_tab = " " x ($max + 4 + 4 + 2);
         my @help = split("\n", wrap('', '', $ih->[2]));
 
         my $help = (shift @help) || '' ;      # head
