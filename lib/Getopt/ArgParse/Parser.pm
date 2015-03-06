@@ -53,7 +53,7 @@ my %Type2ConstMap = (
 
 
 sub _croak {
-    die join('', @_);
+    die join('', @_, "\n");
 }
 
 # Program name. Default $0
@@ -1006,7 +1006,7 @@ sub format_usage {
     my $prog = $self->prog;
     $prog .= ' (' . join(', ', @$aliases) . ')' if @$aliases;
     if( $self->help ) {
-        push @usage, wrap('', '', $prog. ': ' . $self->help);
+    push @usage, wrap('', '', $prog. ': ' . $self->help);
         push @usage, '';
     }
 
@@ -1152,9 +1152,13 @@ sub _format_group_usage {
     }
 
     if (@option_specs) {
-        push @usage, '';
+        push @usage, 'required arguments:';
+        push @usage, @{ $self->_format_usage_by_spec(\@option_specs, 1) };
+    }
+
+    if (@option_specs) {
         push @usage, 'optional arguments:';
-        push @usage, @{ $self->_format_usage_by_spec(\@option_specs) };
+        push @usage, @{ $self->_format_usage_by_spec(\@option_specs, 0) };
     }
 
     $Text::Wrap::columns = $old_wrap_columns; # restore to original
@@ -1165,6 +1169,7 @@ sub _format_group_usage {
 sub _format_usage_by_spec {
     my $self = shift;
     my $specs = shift;
+    my $print_required = shift;
 
     return unless $specs;
 
@@ -1173,6 +1178,10 @@ sub _format_usage_by_spec {
     my @item_help;
 
     for my $spec ( @$specs ) {
+	if (($print_required and !$spec->{'required'}) or (!$print_required and $spec->{'required'}))
+	{
+	  next;
+        }
         my $item = $spec->{metavar};
         if (@{$spec->{flags}}) {
             $item = sprintf(
