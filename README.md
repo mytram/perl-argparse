@@ -12,7 +12,7 @@ NAME
       - A more user-friendly interface to specify arguments, such as
         argument types, argument values split, etc.
       - Subcommand parsing, such svn <command>
-      - Supporting both flag based optional arguments and positional arguments
+      - Supporting both flag based named arguments and positional arguments
 
 VERSION
     version 1.0.3
@@ -144,7 +144,7 @@ DESCRIPTIOIN
     interfaces. A user should be able to use it without looking up the
     document most of the time. It allows applications to define argument
     specifications and it will parse them out of @AGRV by default or a
-    command line if provided. It implements both optional arguments, using
+    command line if provided. It implements both named arguments, using
     Getopt::Long for parsing, and positional arguments. The class also
     generates help and usage messages.
 
@@ -232,7 +232,7 @@ DESCRIPTIOIN
             If dest is not specified, the name or the first option without
             leading dashes will be used as the name for retrieving values.
             If a name is given, this argument is a positional argument.
-            Otherwise, it's an option argument.
+            Otherwise, it's an named argument.
 
             Hyphens can be used in names and flags, but they will be
             replaced with underscores '_' when used as option names. For
@@ -376,10 +376,10 @@ DESCRIPTIOIN
 
     A few things may be worth noting about parse_args().
 
-    First, parsing for Optional Arguments is done by Getopt::Long
+    First, parsing for named Arguments is done by Getopt::Long
 
     Second, parsing for positional arguments takes place after that for
-    optional arguments. It will consume what's still left in the command
+    named arguments. It will consume what's still left in the command
     line.
 
     Finally, the Namespace object is accumulatively poplulated. If
@@ -428,9 +428,11 @@ DESCRIPTIOIN
     subcommand support. A help subcommand is created as part of the
     initialization. The help subcommand has the following options:
 
-        positional arguments: COMMAND ? Show the usage for this command
-        optional arguments: --help, -h ? show this help message and exit
-        --all, -a ? Show the full usage
+        required positional arguments:
+             COMMAND      ? Show the usage for this command
+        optional named arguments:
+            --help, -h     ? show this help message and exit
+            --all, -a      ? Show the full usage
 
     Call add_parser() to add a subparser for each subcommand. Use the parser
     object returned by add_parser() to add the options to the subcommand.

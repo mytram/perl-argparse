@@ -1,5 +1,16 @@
 Revision history for Getopt-ArgParse
 
+1.0.5     2015-03-06 21:46:00
+        - Added new line in die to surpress developmental text (RT#102491)
+        - Started using the terms: postional arguments vs. named
+          arguments in replacement of "optional" arguments (RT#102497)
+        - Updated to output argument help texts in required and
+          optional sections for positional arguments and named
+          arguments
+        - Merged apinco@github for suggesting the above change
+        - Merged rbonthond@github's pull (#5) for help text
+          consistency improvement
+
 1.0.4     2014-11-24 15:48:43 
         - Added artistic 2 license (issue#2)
 	    - Worked around what seemed to be a corrupted stack issue,

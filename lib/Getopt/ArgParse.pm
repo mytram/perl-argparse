@@ -39,11 +39,11 @@ In particular, the modules provides the following features:
   - A more user-friendly interface to specify arguments, such as
     argument types, argument values split, etc.
   - Subcommand parsing, such svn <command>
-  - Supporting both flag based optional arguments and positional arguments
+  - Supporting both flag based named arguments and positional arguments
 
 =head1 VERSION
 
-version 1.0.4
+version 1.0.5
 
 =head1 SYNOPSIS
 
@@ -174,7 +174,7 @@ together aim to provide user-friendly interfaces for writing
 command-line interfaces. A user should be able to use it without
 looking up the document most of the time. It allows applications to
 define argument specifications and it will parse them out of @AGRV by
-default or a command line if provided. It implements both optional
+default or a command line if provided. It implements both named
 arguments, using Getopt::Long for parsing, and positional
 arguments. The class also generates help and usage messages.
 
@@ -358,7 +358,7 @@ Only one value is allowed for scalar argument types: Scalar, Count, and Bool.
 =item * required
 
 Whether or not the command-line option may be omitted (optionals
-only). This has no effect on types 'Bool' and 'Count'. An optional
+only). This has no effect on types 'Bool' and 'Count'. An named
 option is marked by the question mark ? in the generated usage, e.g.
     --help, -h             ? show this help message and exit
 
@@ -418,10 +418,10 @@ namespace object.
 
 A few things may be worth noting about parse_args().
 
-First, parsing for Optional Arguments is done by Getopt::Long
+First, parsing for Named Arguments is done by Getopt::Long
 
 Second, parsing for positional arguments takes place after that for
-optional arguments. It will consume what's still left in the command
+named arguments. It will consume what's still left in the command
 line.
 
 Finally, the Namespace object is accumulatively poplulated. If
@@ -466,7 +466,7 @@ be used.
 
 =head2 Subcommand Support
 
-Note only ne level of subcommand parsing is supported. Subcommands
+Note only one level of subcommand parsing is supported. Subcommands
 cannot have subcommands.
 
 Call add_subparsers() first to initialize the current parser for
@@ -475,9 +475,9 @@ initialization. The help subcommand has the following options:
 
 =over 4
 
-positional arguments:
+required positional arguments:
      COMMAND      ? Show the usage for this command
-optional arguments:
+optional named arguments:
     --help, -h     ? show this help message and exit
     --all, -a      ? Show the full usage
 
