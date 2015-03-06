@@ -2,7 +2,7 @@ require 5.008001;
 
 package Getopt::ArgParse;
 {
-    $Getopt::ArgParse::VERSION = '1.0.4';
+    $Getopt::ArgParse::VERSION = '1.0.5';
 };
 
 # ABSTRACT: Getopt::ArgParse - Parsing args with a richer and more user-friendly API
@@ -627,9 +627,14 @@ Python's argparse
 
 Mytram <mytram2@gmail.com> (original author)
 
+=head1 CONTRIBUTORS
+
+Robbin Bonthond (rbonthond@github)
+Adam Pfeiffer (apinco@github)
+
 =head1 COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2014 by Mytram.
+This software is Copyright (c) 2015 by Mytram.
 
 This is free software, licensed under:
 

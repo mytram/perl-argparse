@@ -29,6 +29,8 @@ use constant {
 
 	# Internal
     ERROR_PREFIX => 'Getopt::ArgParse: ',
+    PRINT_REQUIRED => 1,
+    PRINT_OPTIONAL => 2,
 };
 
 # Allow customization
@@ -1145,20 +1147,20 @@ sub _format_group_usage {
         push @usage, wrap('', '', $group . ': ' . ($self->{-group_description}{$group} || '')  );
     }
 
-    if (@position_specs) {
-        push @usage, '';
-        push @usage, 'positional arguments:';
-        push @usage, @{ $self->_format_usage_by_spec(\@position_specs) };
-    }
-
-    if (@option_specs) {
-        push @usage, 'required arguments:';
-        push @usage, @{ $self->_format_usage_by_spec(\@option_specs, 1) };
-    }
-
-    if (@option_specs) {
-        push @usage, 'optional arguments:';
-        push @usage, @{ $self->_format_usage_by_spec(\@option_specs, 0) };
+    # named arguments are arguments preceded by a hyphen as optional
+    # vs. positional are too confusing.
+    for my $spec_name ( [ \@position_specs, 'positional' ], [ \@option_specs, 'named' ]) {
+        my ($specs, $spec_name) = @$spec_name;
+        for my $type_name ( [ PRINT_REQUIRED, 'required'], [ PRINT_OPTIONAL, 'optional'] ) {
+            my ($type, $type_name) = @$type_name;
+            my $output = $self->_format_usage_by_spec($specs, $type);
+            if (@$output) {
+                push @usage, '';
+                # Start a section: e.g. required positional arguments:
+                push @usage, sprintf('%s %s arguments:', $type_name, $spec_name);
+                push @usage, @$output;
+            }
+        }
     }
 
     $Text::Wrap::columns = $old_wrap_columns; # restore to original
@@ -1167,9 +1169,9 @@ sub _format_group_usage {
 }
 
 sub _format_usage_by_spec {
-    my $self = shift;
-    my $specs = shift;
-    my $print_required = shift;
+    my $self       = shift;
+    my $specs      = shift;
+    my $print_type = shift;
 
     return unless $specs;
 
@@ -1177,12 +1179,12 @@ sub _format_usage_by_spec {
     my $max = 10;
     my @item_help;
 
-    for my $spec ( @$specs ) {
-	if (($print_required and !$spec->{'required'}) or (!$print_required and $spec->{'required'}))
-	{
-	  next;
-        }
+  SPEC: for my $spec ( @$specs ) {
+        next SPEC if    ($print_type == PRINT_OPTIONAL &&  $spec->{'required'})
+                     || ($print_type == PRINT_REQUIRED && !$spec->{'required'});
+
         my $item = $spec->{metavar};
+
         if (@{$spec->{flags}}) {
             $item = sprintf(
                 "%s %s",
@@ -1202,7 +1204,7 @@ sub _format_usage_by_spec {
                 while (my ($k, $v) = each %{$spec->{default}}) {
                     push @$values, "$k=$v";
                 }
-            } elsif (ref $spec->{default} eq "ARRAY") {
+            } elsif (ref $spec->{default} eq 'ARRAY') {
                 $values = $spec->{default};
             } else {
                 $values = [ $spec->{default} ];
@@ -1311,7 +1313,7 @@ Mytram <mytram2@gmail.com> (original author)
 
 =head1 COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2014 by Mytram.
+This software is Copyright (c) 2015 by Mytram.
 
 This is free software, licensed under:
 

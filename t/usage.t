@@ -85,8 +85,25 @@ EOS
 );
 
 $sp->add_argument(
+    'name',
+    help => 'positional NAME',
+    required => 1
+);
+
+$sp->add_argument(
+    'name2',
+    help => 'positional NAME2',
+);
+
+$sp->add_argument(
     '--foo', '-f',
     help => 'subcommand foo',
+);
+
+$sp->add_argument(
+    '--boo', '-b',
+    help => 'subcommand boo',
+    required => 1,
 );
 
 $parser->print_usage();
