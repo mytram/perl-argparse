@@ -970,8 +970,19 @@ sub _post_apply_processing {
 # interface
 sub print_usage {
     my $self = shift;
+    my %i = @_;
+    my $sortby;
+    if (exists $i{'sortby'} and ($i{'sortby'} eq 'name'))
+    {
+        $sortby = $i{'sortby'};
+    }
+    else
+    {
+        $sortby = 'position';
+    }
 
-    my $usage = $self->format_usage;
+
+    my $usage = $self->format_usage($sortby);
 
     print STDERR $_, "\n" for @$usage;
 }
@@ -997,6 +1008,7 @@ sub print_command_usage {
 # Interface
 sub format_usage {
     my $self = shift;
+    my $sortby = shift;
 
     $self->_sort_specs_by_groups() unless $self->{-groups};
 
@@ -1012,7 +1024,7 @@ sub format_usage {
         push @usage, '';
     }
 
-    my ($help, $option_string) =  $self->_format_group_usage();
+    my ($help, $option_string) =  $self->_format_group_usage($sortby);
     $Text::Wrap::columns = 80;
 
     my $header = sprintf(
@@ -1107,10 +1119,41 @@ sub _sort_specs_by_groups {
     }
 }
 
+# This funtion finds the help argument and moves it 
+# to the front of the optional parameters
+sub _move_help_after_required
+{
+    my @option_spec = @_;
+    my ($help, $i);
+
+    $i=0;
+    foreach my $element (@option_spec)
+    {
+        if ($element->{'position'} == 0)
+        {
+            $help = splice @option_spec, $i, 1;
+            last;
+        }
+        $i++;
+    }
+
+    $i=0;
+    foreach my $element (@option_spec)
+    {
+        if (!$element->{required})
+        {
+            splice @option_spec, $i, 0, $help;
+            last;
+        }
+        $i++;
+    }
+    return @option_spec;
+}
+
 sub _format_group_usage {
     my $self = shift;
+    my $sortby = shift;
     my $group = '';
-    # my $group = shift || '';
 
     unless ($self->{-groups}) {
         $self->_sort_specs_by_groups();
@@ -1121,9 +1164,23 @@ sub _format_group_usage {
 
     my @usage;
 
-    my @option_specs = sort {
-        $a->{position} <=> $b->{position}
-    } @{ $self->{-groups}{$group}{-option} || [] };
+    my @option_specs;
+# When doing a sort by name, it puts all required parameters
+# first sorted by name, then all optional parameters sorted by name
+    if ($sortby eq 'name')
+    {
+        @option_specs = sort {
+            ($b->{required} cmp $a->{required} || $a->{name} cmp $b->{name})
+        } @{ $self->{-groups}{$group}{-option} || [] };
+        @option_specs = _move_help_after_required(@option_specs);
+    }
+    else
+    {
+        @option_specs = sort {
+            $a->{position} <=> $b->{position}
+        } @{ $self->{-groups}{$group}{-option} || [] };
+    }
+    
 
     my @flag_items = map {
             ($_->{required} ? '' : '[')
