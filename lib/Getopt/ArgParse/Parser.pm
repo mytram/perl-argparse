@@ -119,6 +119,15 @@ has _option_position => ( is => 'rw', required => 1, default => sub { 0 } );
 # The current subcommand the same as namespace->current_command
 has _command => ( is => 'rw');
 
+# Sortby parameter.  Used to determine if sorting by 'position' or by 'name'
+has sortby => ( 
+        is => 'rw', 
+        isa => sub {
+            die "$_[0] is not valid: valid options are: name, position" unless ($_[0] eq 'position' or $_[0] eq 'name');
+        },
+        default => $_[0] || 'position'
+);
+
 sub BUILD {
     my $self = shift;
 
@@ -970,19 +979,8 @@ sub _post_apply_processing {
 # interface
 sub print_usage {
     my $self = shift;
-    my %i = @_;
-    my $sortby;
-    if (exists $i{'sortby'} and ($i{'sortby'} eq 'name'))
-    {
-        $sortby = $i{'sortby'};
-    }
-    else
-    {
-        $sortby = 'position';
-    }
 
-
-    my $usage = $self->format_usage($sortby);
+    my $usage = $self->format_usage();
 
     print STDERR $_, "\n" for @$usage;
 }
@@ -1008,7 +1006,6 @@ sub print_command_usage {
 # Interface
 sub format_usage {
     my $self = shift;
-    my $sortby = shift;
 
     $self->_sort_specs_by_groups() unless $self->{-groups};
 
@@ -1024,7 +1021,7 @@ sub format_usage {
         push @usage, '';
     }
 
-    my ($help, $option_string) =  $self->_format_group_usage($sortby);
+    my ($help, $option_string) =  $self->_format_group_usage();
     $Text::Wrap::columns = 80;
 
     my $header = sprintf(
@@ -1152,7 +1149,6 @@ sub _move_help_after_required
 
 sub _format_group_usage {
     my $self = shift;
-    my $sortby = shift;
     my $group = '';
 
     unless ($self->{-groups}) {
@@ -1167,18 +1163,19 @@ sub _format_group_usage {
     my @option_specs;
 # When doing a sort by name, it puts all required parameters
 # first sorted by name, then all optional parameters sorted by name
-    if ($sortby eq 'name')
+    if ($self->sortby eq 'name')
     {
         @option_specs = sort {
             ($b->{required} cmp $a->{required} || $a->{name} cmp $b->{name})
         } @{ $self->{-groups}{$group}{-option} || [] };
         @option_specs = _move_help_after_required(@option_specs);
     }
-    else
+    elsif($self->sortby eq 'position')
     {
         @option_specs = sort {
-            $a->{position} <=> $b->{position}
+            ($b->{required} cmp $a->{required} || $b->{position} <=> $a->{position} )
         } @{ $self->{-groups}{$group}{-option} || [] };
+        @option_specs = _move_help_after_required(@option_specs);
     }
     
 
