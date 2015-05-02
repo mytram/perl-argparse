@@ -119,6 +119,15 @@ has _option_position => ( is => 'rw', required => 1, default => sub { 0 } );
 # The current subcommand the same as namespace->current_command
 has _command => ( is => 'rw');
 
+# Sortby parameter.  Used to determine if sorting by 'position' or by 'name'
+has sortby => ( 
+        is => 'rw', 
+        isa => sub {
+            die "$_[0] is not valid: valid options are: name, position" unless ($_[0] eq 'position' or $_[0] eq 'name');
+        },
+        default => $_[0] || 'position'
+);
+
 sub BUILD {
     my $self = shift;
 
@@ -971,7 +980,7 @@ sub _post_apply_processing {
 sub print_usage {
     my $self = shift;
 
-    my $usage = $self->format_usage;
+    my $usage = $self->format_usage();
 
     print STDERR $_, "\n" for @$usage;
 }
@@ -1107,10 +1116,40 @@ sub _sort_specs_by_groups {
     }
 }
 
+# This funtion finds the help argument and moves it 
+# to the front of the optional parameters
+sub _move_help_after_required
+{
+    my @option_spec = @_;
+    my ($help, $i);
+
+    $i=0;
+    foreach my $element (@option_spec)
+    {
+        if ($element->{'position'} == 0)
+        {
+            $help = splice @option_spec, $i, 1;
+            last;
+        }
+        $i++;
+    }
+
+    $i=0;
+    foreach my $element (@option_spec)
+    {
+        if (!$element->{required})
+        {
+            splice @option_spec, $i, 0, $help;
+            last;
+        }
+        $i++;
+    }
+    return @option_spec;
+}
+
 sub _format_group_usage {
     my $self = shift;
     my $group = '';
-    # my $group = shift || '';
 
     unless ($self->{-groups}) {
         $self->_sort_specs_by_groups();
@@ -1121,9 +1160,24 @@ sub _format_group_usage {
 
     my @usage;
 
-    my @option_specs = sort {
-        $a->{position} <=> $b->{position}
-    } @{ $self->{-groups}{$group}{-option} || [] };
+    my @option_specs;
+# When doing a sort by name, it puts all required parameters
+# first sorted by name, then all optional parameters sorted by name
+    if ($self->sortby eq 'name')
+    {
+        @option_specs = sort {
+            ($b->{required} cmp $a->{required} || $a->{name} cmp $b->{name})
+        } @{ $self->{-groups}{$group}{-option} || [] };
+        @option_specs = _move_help_after_required(@option_specs);
+    }
+    elsif($self->sortby eq 'position')
+    {
+        @option_specs = sort {
+            ($b->{required} cmp $a->{required} || $b->{position} <=> $a->{position} )
+        } @{ $self->{-groups}{$group}{-option} || [] };
+        @option_specs = _move_help_after_required(@option_specs);
+    }
+    
 
     my @flag_items = map {
             ($_->{required} ? '' : '[')
