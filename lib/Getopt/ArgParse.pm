@@ -2,7 +2,7 @@ require 5.008001;
 
 package Getopt::ArgParse;
 {
-    $Getopt::ArgParse::VERSION = '1.0.5';
+    $Getopt::ArgParse::VERSION = '1.0.6';
 };
 
 # ABSTRACT: Getopt::ArgParse - Parsing args with a richer and more user-friendly API
@@ -43,7 +43,7 @@ In particular, the modules provides the following features:
 
 =head1 VERSION
 
-version 1.0.5
+version 1.0.6
 
 =head1 SYNOPSIS
 

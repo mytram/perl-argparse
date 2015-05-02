@@ -1,5 +1,9 @@
 Revision history for Getopt-ArgParse
 
+1.0.6     2015-05-02 20:12:44 
+        - Added new functionality to print_usage #8
+        - Merged the pull request from apinco@github (https://github.com/mytram/perl-argparse/pull/8 for the above change
+
 1.0.5     2015-03-06 21:46:00
         - Added new line in die to surpress developmental text (RT#102491)
         - Started using the terms: postional arguments vs. named
